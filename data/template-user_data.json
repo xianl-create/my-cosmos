@@ -1,0 +1,35 @@
+{
+  "nodes": [],
+  "edges": [],
+  "displayName": "New user",
+  "autoSave": true,
+  "workspaces": [
+    {
+      "id": "home",
+      "name": "Home",
+      "icon": "🏠"
+    }
+  ],
+  "cws": "home",
+  "backgroundSound": false,
+  "theme": "galaxy",
+  "backgroundColor": "#0a0e27",
+  "shortcuts": {
+    "double-space": "Space"
+  },
+  "todayGoals": {},
+  "nodeOrder": {},
+  "expandPages": [
+    "progress",
+    "pathbehind",
+    "pagetree",
+    "pageagents",
+    "pageinterstellar"
+  ],
+  "expandHubDev2026Seeded": true,
+  "todoList": [],
+  "todoHideCompleted": true,
+  "todoDaysCompleted": null,
+  "notesCatalogHidden": [],
+  "notesCatalogHideCompletedNotes": true
+}

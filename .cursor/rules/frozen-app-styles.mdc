@@ -1,0 +1,22 @@
+---
+description: Prevents accidental edits to fixed My Cosmos styling (v122 baseline).
+globs:
+  - css/app.css
+  - index.html
+alwaysApply: false
+---
+
+# Frozen front-end appearance
+
+The canonical visual baseline is **`_records/my-cosmos/v122`** (`css/app.css` and structural/`style`-bearing parts of `index.html`).
+
+## Rules for agents
+
+1. **Do not** edit `css/app.css` for layout, colors, typography, spacing, or component look (e.g. checkboxes, buttons, sidebars) unless the user **explicitly** asks to change styling.
+2. **Do not** add or change `font-size`, `color`, `background`, `border`, `padding`/`margin` for UI in `index.html` **inline styles** except for **new** non-cosmetic features with user approval, or when the user requests a style update.
+3. If a task is **logic-only** (data, API, `js/app.js` behavior), leave `app.css` and `index.html` visual tokens untouched.
+4. If styling must change, **note in the commit/PR** that it is an intentional visual change (and consider updating the `_records/.../v122` reference when the user wants a new baseline).
+
+## How to refresh the baseline (when the user wants a new “golden” look)
+
+Copy the agreed `css/app.css` (and any matching `index.html` style blocks) into ` _records/my-cosmos/vNN/` and update this rule if the path version changes.

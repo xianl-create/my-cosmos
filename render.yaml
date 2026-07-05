@@ -1,0 +1,23 @@
+# Render blueprint for the PUBLIC hosted deployment of My Cosmos.
+# See DEPLOY.md for the full setup walkthrough (private data repo + token).
+services:
+  - type: web
+    name: my-cosmos
+    runtime: node
+    plan: free
+    # node-pty / ws are optionalDependencies (local in-app terminal only) —
+    # skip them so the build needs no native compilation.
+    buildCommand: npm install --omit=optional
+    startCommand: node scripts/server.js
+    healthCheckPath: /api/health
+    envVars:
+      - key: MY_COSMOS_PUBLIC
+        value: "1"
+      # Private GitHub repo that durably stores user data (free tier disk is
+      # ephemeral). Set both in the Render dashboard — never commit the token.
+      - key: MY_COSMOS_GH_REPO # e.g. yourname/my-cosmos-data (PRIVATE repo)
+        sync: false
+      - key: MY_COSMOS_GH_TOKEN # fine-grained PAT, Contents read/write on that repo only
+        sync: false
+      - key: MY_COSMOS_GH_BRANCH
+        value: main

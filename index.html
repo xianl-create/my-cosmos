@@ -1,0 +1,1372 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>My Cosmos</title>
+<script>
+(function(){
+  if(typeof location==='undefined'||location.protocol!=='file:')return;
+  try{if(sessionStorage.getItem('pn-skip-localhost')==='1')return;}catch(e1){return;}
+  var poll=null;
+  var o=document.createElement('div');
+  o.id='pn-file-launcher';
+  o.style.cssText='position:fixed;inset:0;z-index:2147483647;background:rgba(15,17,23,.96);color:#e8eaed;font-family:system-ui,-apple-system,BlinkMacSystemFont,sans-serif;display:flex;align-items:center;justify-content:center;padding:20px;text-align:center;';
+  o.innerHTML='<div style="max-width:520px"><h1 style="margin:0 0 10px;font-size:1.35rem;font-weight:600">My Cosmos</h1><p style="color:#9aa3b2;font-size:14px;line-height:1.55;margin:0 0 12px">Connecting to <code style="background:#1a1f2e;padding:2px 8px;border-radius:6px;font-size:13px">http://localhost:3000</code> so your data stays in this project’s <code style="background:#1a1f2e;padding:2px 8px;border-radius:6px;font-size:13px">data/</code> folder (one JSON file per user).</p><p id="pn-lm" style="min-height:3.2em;font-size:14px;margin:16px 0;color:#c4b5fd">Looking for the local server…</p><p style="color:#9aa3b2;font-size:13px;line-height:1.5">Browsers cannot start Node from a raw file page. Double-click <strong style="color:#e8eaed">start.command</strong> in this folder (Terminal opens and runs the server). This page switches to the app when the server responds.</p><p style="margin-top:14px"><a href="http://localhost:3000/index.html" style="color:#a5b4fc;font-size:14px;font-weight:600">Open app in browser</a> <span style="color:#6b7280">·</span> <a href="Open%20My%20Cosmos.html" style="color:#a5b4fc;font-size:13px">Launcher help</a></p><p style="margin-top:20px"><button type="button" id="pn-b1" style="margin:6px;padding:10px 18px;border-radius:8px;border:1px solid #6c63ff;background:#6c63ff;color:#fff;cursor:pointer;font-size:14px">Try again</button> <button type="button" id="pn-b2" style="margin:6px;padding:10px 18px;border-radius:8px;border:1px solid #4c4f6a;background:#2d3154;color:#e8eaed;cursor:pointer;font-size:14px">Stay on file://</button></p></div>';
+  function rm(){try{if(poll)clearInterval(poll);poll=null;o.remove();}catch(e2){}}
+  function tryGo(){
+    var lm=document.getElementById('pn-lm');
+    if(lm)lm.textContent='Checking local server…';
+    function hit(url,next){
+      fetch(url,{method:'GET',mode:'cors',cache:'no-store'}).then(function(r){
+        if(r.ok)location.replace('http://localhost:3000/index.html');
+        else{if(lm)lm.textContent='Server answered but /api/health was not OK. Check the Terminal window from start.command.';}
+      }).catch(function(){if(typeof next==='function')next();else{if(lm)lm.textContent='No server yet. Run start.command in this folder, then use “Open app in browser” or Try again.';}});
+    }
+    hit('http://127.0.0.1:3000/api/health',function(){hit('http://localhost:3000/api/health');});
+  }
+  document.documentElement.appendChild(o);
+  o.querySelector('#pn-b1').onclick=function(){tryGo();};
+  o.querySelector('#pn-b2').onclick=function(){try{sessionStorage.setItem('pn-skip-localhost','1');}catch(e3){}rm();};
+  tryGo();
+  poll=setInterval(tryGo,700);
+})();
+</script>
+<script src="https://d3js.org/d3.v7.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js" crossorigin="anonymous"></script>
+<!-- xterm.js for the in-app interactive Terminal column (loads from CDN; no npm step on the client). -->
+<link href="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/css/xterm.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/@xterm/xterm@5.5.0/lib/xterm.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@xterm/addon-fit@0.10.0/lib/addon-fit.min.js"></script>
+<script id="preload-b64" type="text/plain"></script>
+<script src="data/file_boot.js"></script>
+<script>(function(){try{if(window.__PRELOAD_USER_DATA__)return;var b=document.getElementById("preload-b64");if(b&&b.textContent&&b.textContent.length>20){window.__PRELOAD_USER_DATA__=JSON.parse(atob(b.textContent));}}catch(e){}})();</script>
+<link href="css/app.css" rel="stylesheet">
+<style id="wiz-xtra-css">
+/* Wizard-only: Structure suggest + Connect linking (keeps app.css baseline unchanged) */
+#wt .wiz-title-row{display:inline-flex;align-items:center;gap:10px;justify-content:center;flex-wrap:wrap}
+.wiz-auto-nest-btn{width:36px;height:36px;border-radius:50%;border:1px solid var(--bdr);background:var(--bg2);cursor:pointer;font-size:18px;line-height:1;display:inline-flex;align-items:center;justify-content:center;padding:0;vertical-align:middle}
+.wiz-auto-nest-btn:hover{background:var(--bg3);border-color:var(--acc)}
+#wiz-connect-root{position:relative;flex:1;min-height:220px;overflow:auto;padding:4px 36px 8px;-webkit-overflow-scrolling:touch}
+#wiz-conn-svg{position:absolute;inset:0;width:100%;height:100%;pointer-events:none;z-index:2;overflow:visible}
+#wiz-connect-inner{position:relative;z-index:1}
+.wiz-conn-tab{transition:box-shadow .15s ease,border-color .15s ease,filter .15s ease}
+.wiz-conn-tab--hi{box-shadow:0 0 14px rgba(108,99,255,.45);border-color:var(--acc)!important;filter:brightness(1.06)}
+.wiz-conn-tab.wiz-conn-pulse{outline:2px dashed var(--acc);outline-offset:2px}
+.wiz-nest-branch{margin-bottom:3px}
+</style>
+</head>
+<body>
+<!-- LOGIN -->
+<div id="scr-login" class="screen">
+  <div class="lbox">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="12" cy="12" r="3"/><circle cx="4" cy="6" r="2"/><circle cx="20" cy="6" r="2"/><circle cx="4" cy="18" r="2"/><circle cx="20" cy="18" r="2"/><line x1="6" y1="6" x2="10" y2="11"/><line x1="18" y1="6" x2="14" y2="11"/><line x1="6" y1="18" x2="10" y2="13"/><line x1="18" y1="18" x2="14" y2="13"/></svg>
+    <h1>My Cosmos</h1><p>Visualize your life as a nested network</p>
+    <div class="lrow"><div class="lrow-inp-wrap"><input class="inp" id="lg-name" placeholder="Enter your name..." autofocus><button type="button" class="lg-dice" id="lg-dice" onclick="rollLoginName()" title="Random name" aria-label="Random name"><svg class="lg-dice-svg" viewBox="0 0 48 48" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lgDiceFace" x1="4" y1="4" x2="40" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#fef08a"/><stop offset="0.25" stop-color="#facc15"/><stop offset="0.55" stop-color="#fb923c"/><stop offset="0.8" stop-color="#f472b6"/><stop offset="1" stop-color="#c084fc"/></linearGradient><filter id="lgDiceSh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#0f172a" flood-opacity="0.4"/></filter></defs><ellipse cx="24" cy="42" rx="15" ry="3.2" fill="#0f172a" opacity="0.18"/><g filter="url(#lgDiceSh)"><rect x="10" y="10" width="32" height="32" rx="8.5" fill="#7c3aed"/><rect x="6" y="6" width="32" height="32" rx="9" fill="url(#lgDiceFace)" stroke="#3730a3" stroke-width="2.4"/><path d="M10 14 Q24 10 38 14" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.45"/></g><circle cx="17" cy="19" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/><circle cx="31" cy="19" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/><circle cx="24" cy="26.5" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/><circle cx="17" cy="34" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/><circle cx="31" cy="34" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/></svg></button></div><button class="btn btn-p" onclick="doLogin()">Go →</button></div>
+    <!-- Public hosted mode only (MY_COSMOS_PUBLIC=1): account + password. Hidden locally. -->
+    <div id="lg-public-auth" style="display:none;margin-top:12px">
+      <input class="inp" id="lg-pass" type="password" placeholder="Password (8+ characters)..." autocomplete="current-password" style="width:100%;margin-bottom:10px">
+      <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+        <button class="btn btn-p" id="lg-signin-btn" onclick="publicAuthSubmit('login')">Sign in</button>
+        <button class="btn btn-g" id="lg-register-btn" onclick="publicAuthSubmit('register')">Create account</button>
+      </div>
+      <div id="lg-auth-msg" style="display:none;margin-top:10px;font-size:12px;line-height:1.4;color:#e05c5c"></div>
+    </div>
+    <div class="ux" id="ux" style="display:none"><h3>Or continue as:</h3><div id="ul"></div></div>
+    <div id="lg-tools-row" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--bdr);display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
+      <button class="btn btn-g" onclick="importFromDataFolder()" style="font-size:12px;padding:6px 12px" title="Import users from data/ folder">📥 Import</button>
+      <button class="btn btn-g" onclick="exportAllToDataFolder()" style="font-size:12px;padding:6px 12px" title="Export all users to data/ folder">📤 Export All</button>
+    </div>
+  </div>
+</div>
+<!-- ONBOARDING -->
+<div id="scr-wiz" class="screen hide">
+  <div class="wiz">
+    <div class="wh"><h2 id="wt"></h2><p id="ws"></p></div>
+    <div class="wdots" id="wdots"></div>
+    <div class="wbod" id="wbod"></div>
+    <div class="wft"><button class="btn btn-g" id="wback" onclick="wBack()" style="visibility:hidden">← Back</button><button class="btn btn-p" id="wnext" onclick="wNext()">Next →</button></div>
+  </div>
+</div>
+<!-- MAIN APP -->
+<div id="scr-app" class="screen hide">
+  <!-- Left sidebar: workspace tabs -->
+  <div id="ls">
+    <div class="lt on" id="lt-home" onclick="swView('home')" title="Home" draggable="true" ondragstart="handlePageDragStart(event,'home')" ondragend="handlePageDragEnd(event)" data-page-id="home">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+        <circle cx="12" cy="12" r="10" fill="#6C63FF" opacity="0.3"/>
+        <path d="M12 2 Q8 8 8 12 Q8 16 12 18 Q16 16 16 12 Q16 8 12 2" fill="#6C63FF" opacity="0.6"/>
+        <path d="M12 2 Q10 6 10 12 Q10 18 12 20 Q14 18 14 12 Q14 6 12 2" fill="#6C63FF" opacity="0.8"/>
+        <circle cx="9" cy="9" r="1.5" fill="#FFD700"/>
+        <circle cx="15" cy="10" r="1" fill="#FFD700"/>
+        <circle cx="11" cy="15" r="1.2" fill="#FFD700"/>
+        <circle cx="14" cy="7" r="0.8" fill="#FFD700"/>
+        <circle cx="7" cy="13" r="0.8" fill="#FFD700"/>
+      </svg>
+      <span class="tip">Home</span>
+    </div>
+    <div class="lt" id="lt-progress" onclick="swView('progress')" title="Progress" draggable="true" ondragstart="handlePageDragStart(event,'progress')" ondragend="handlePageDragEnd(event)" ondragover="handleLeftSidebarDragOver(event)" ondrop="handleLeftSidebarDrop(event,'progress')" ondragenter="handleLeftSidebarDragEnter(event)" ondragleave="handleLeftSidebarDragLeave(event)" data-page-id="progress">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+        <rect x="2" y="9" width="20" height="6" rx="3" fill="#87CEEB"/>
+        <rect x="2" y="9" width="15" height="6" rx="3" fill="#FF6B35"/>
+      </svg>
+      <span class="tip">Progress</span>
+    </div>
+    <div class="lt" id="lt-calendar" onclick="swView('calendar')" title="Calendar" draggable="true" ondragstart="handlePageDragStart(event,'calendar')" ondragend="handlePageDragEnd(event)" ondragover="handleLeftSidebarDragOver(event)" ondrop="handleLeftSidebarDrop(event,'calendar')" ondragenter="handleLeftSidebarDragEnter(event)" ondragleave="handleLeftSidebarDragLeave(event)" data-page-id="calendar">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+        <rect x="2" y="3" width="20" height="18" rx="2" stroke="black" stroke-width="2" fill="white"/>
+        <rect x="2" y="3" width="20" height="6" rx="2" fill="#4FD1C7" stroke="black" stroke-width="2"/>
+        <circle cx="6" cy="6" r="0.8" fill="black"/>
+        <circle cx="9" cy="6" r="0.8" fill="black"/>
+        <circle cx="15" cy="6" r="0.8" fill="black"/>
+        <circle cx="18" cy="6" r="0.8" fill="black"/>
+        <rect x="8" y="12" width="8" height="7" rx="2" fill="#A7F3D0" stroke="black" stroke-width="1.5"/>
+        <text x="12" y="17" font-family="Arial, sans-serif" font-size="9" font-weight="bold" fill="black" text-anchor="middle" dominant-baseline="middle">11</text>
+      </svg>
+      <span class="tip">Calendar</span>
+    </div>
+    <div class="lt" id="lt-pathbehind" onclick="swView('pathbehind')" title="Path Behind" draggable="true" ondragstart="handlePageDragStart(event,'pathbehind')" ondragend="handlePageDragEnd(event)" ondragover="handleLeftSidebarDragOver(event)" ondrop="handleLeftSidebarDrop(event,'pathbehind')" ondragenter="handleLeftSidebarDragEnter(event)" ondragleave="handleLeftSidebarDragLeave(event)" data-page-id="pathbehind">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+        <!-- Dark blue circular background -->
+        <circle cx="12" cy="12" r="12" fill="#1a237e"/>
+        <!-- Purple orbital paths -->
+        <ellipse cx="12" cy="12" rx="10" ry="6" fill="none" stroke="#9c27b0" stroke-width="0.8" opacity="0.7"/>
+        <path d="M 2 12 Q 6 6 12 6 Q 18 6 22 12" fill="none" stroke="#9c27b0" stroke-width="0.8" opacity="0.7"/>
+        <!-- Large orange-yellow planet (sun) with gradient -->
+        <defs>
+          <linearGradient id="sunGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#FFD700;stop-opacity:1" />
+            <stop offset="100%" style="stop-color:#FF8C00;stop-opacity:1" />
+          </linearGradient>
+        </defs>
+        <circle cx="9" cy="11" r="3.5" fill="url(#sunGrad)"/>
+        <!-- Green planet top right -->
+        <circle cx="17" cy="7" r="2" fill="#4caf50"/>
+        <!-- Pink planet bottom right -->
+        <circle cx="18" cy="16" r="2.2" fill="#e91e63"/>
+        <!-- Small orange planet bottom center -->
+        <circle cx="12" cy="18" r="1.5" fill="#ff9800"/>
+        <!-- Small stars/dots -->
+        <circle cx="5" cy="6" r="0.8" fill="#ffeb3b"/>
+        <circle cx="19" cy="10" r="0.8" fill="#03a9f4"/>
+        <circle cx="6" cy="18" r="0.8" fill="#ff9800"/>
+      </svg>
+      <span class="tip">Path Behind</span>
+    </div>
+    <div class="lt" id="lt-notes" onclick="swView('notes')" title="Notes" draggable="true" ondragstart="handlePageDragStart(event,'notes')" ondragend="handlePageDragEnd(event)" ondragover="handleLeftSidebarDragOver(event)" ondrop="handleLeftSidebarDrop(event,'notes')" ondragenter="handleLeftSidebarDragEnter(event)" ondragleave="handleLeftSidebarDragLeave(event)" data-page-id="notes">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+        <!-- Cute cartoon cyberpunk style notebook icon -->
+        <rect x="3" y="2" width="18" height="20" rx="2" fill="#6C63FF" opacity="0.3" stroke="#6C63FF" stroke-width="1.5"/>
+        <rect x="3" y="2" width="18" height="5" rx="2" fill="#8b84ff" opacity="0.6"/>
+        <line x1="6" y1="5" x2="18" y2="5" stroke="#FFD700" stroke-width="1.5" stroke-linecap="round"/>
+        <line x1="6" y1="9" x2="15" y2="9" stroke="#87CEEB" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="6" y1="12" x2="16" y2="12" stroke="#87CEEB" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="6" y1="15" x2="14" y2="15" stroke="#87CEEB" stroke-width="1.2" stroke-linecap="round"/>
+        <circle cx="18" cy="18" r="2.5" fill="#FF6B35" opacity="0.8"/>
+        <circle cx="18" cy="18" r="1.2" fill="#FFD700"/>
+        <circle cx="5" cy="7" r="0.6" fill="#FFD700"/>
+        <circle cx="19" cy="7" r="0.6" fill="#FFD700"/>
+      </svg>
+      <span class="tip">Notes</span>
+    </div>
+    <div class="lt" id="lt-pagetree" onclick="swView('pagetree')" title="Tree" draggable="true" ondragstart="handlePageDragStart(event,'pagetree')" ondragend="handlePageDragEnd(event)" ondragover="handleLeftSidebarDragOver(event)" ondrop="handleLeftSidebarDrop(event,'pagetree')" ondragenter="handleLeftSidebarDragEnter(event)" ondragleave="handleLeftSidebarDragLeave(event)" data-page-id="pagetree">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+        <defs><linearGradient id="ltPagetreeRailGrad" x1="0%" y1="0%" x2="100%" y2="100%"><stop offset="0%" style="stop-color:#6C63FF"/><stop offset="100%" style="stop-color:#87CEEB"/></linearGradient></defs>
+        <line x1="12" y1="4" x2="12" y2="8" stroke="url(#ltPagetreeRailGrad)" stroke-width="1.5" stroke-linecap="round"/>
+        <rect x="6" y="8" width="12" height="5" rx="1.5" fill="#6C63FF" opacity="0.35" stroke="#6C63FF" stroke-width="1.2"/>
+        <line x1="8" y1="13" x2="8" y2="16" stroke="#87CEEB" stroke-width="1.2"/><line x1="16" y1="13" x2="16" y2="16" stroke="#87CEEB" stroke-width="1.2"/>
+        <line x1="12" y1="13" x2="12" y2="16" stroke="#87CEEB" stroke-width="1.2"/>
+        <rect x="4" y="16" width="8" height="5" rx="1.5" fill="#87CEEB" opacity="0.25" stroke="#6C63FF" stroke-width="1"/><rect x="16" y="16" width="4" height="5" rx="1.5" fill="#FFD700" opacity="0.35" stroke="#FF6B35" stroke-width="1"/>
+        <circle cx="12" cy="10.5" r="1" fill="#FFD700"/>
+      </svg>
+      <span class="tip">Tree</span>
+    </div>
+    <div class="lt" id="lt-pageagents" onclick="swView('pageagents')" title="Agents" draggable="true" ondragstart="handlePageDragStart(event,'pageagents')" ondragend="handlePageDragEnd(event)" ondragover="handleLeftSidebarDragOver(event)" ondrop="handleLeftSidebarDrop(event,'pageagents')" ondragenter="handleLeftSidebarDragEnter(event)" ondragleave="handleLeftSidebarDragLeave(event)" data-page-id="pageagents">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+        <line x1="12" y1="3" x2="12" y2="5.5" stroke="#6C63FF" stroke-width="1.3" stroke-linecap="round"/>
+        <circle cx="12" cy="2.5" r="1.1" fill="#FFD700" stroke="#6C63FF" stroke-width="0.6"/>
+        <rect x="5.5" y="5.5" width="13" height="9" rx="2.2" fill="#6C63FF" opacity="0.5" stroke="#6C63FF" stroke-width="1.2"/>
+        <circle cx="9.3" cy="10" r="1.3" fill="#FFD700"/>
+        <circle cx="14.7" cy="10" r="1.3" fill="#87CEEB"/>
+        <line x1="9.5" y1="13" x2="14.5" y2="13" stroke="#FFD700" stroke-width="1" stroke-linecap="round" opacity="0.85"/>
+        <rect x="7" y="15" width="10" height="6.5" rx="1.6" fill="#8b84ff" opacity="0.55" stroke="#6C63FF" stroke-width="1.1"/>
+        <circle cx="12" cy="18.2" r="0.85" fill="#FFD700"/>
+        <line x1="5.5" y1="17" x2="3.5" y2="18.5" stroke="#6C63FF" stroke-width="1.2" stroke-linecap="round"/>
+        <line x1="18.5" y1="17" x2="20.5" y2="18.5" stroke="#6C63FF" stroke-width="1.2" stroke-linecap="round"/>
+      </svg>
+      <span class="tip">Agents</span>
+    </div>
+    <div class="lt" id="lt-pageinterstellar" onclick="swView('pageinterstellar')" title="Interstellar" draggable="true" ondragstart="handlePageDragStart(event,'pageinterstellar')" ondragend="handlePageDragEnd(event)" ondragover="handleLeftSidebarDragOver(event)" ondrop="handleLeftSidebarDrop(event,'pageinterstellar')" ondragenter="handleLeftSidebarDragEnter(event)" ondragleave="handleLeftSidebarDragLeave(event)" data-page-id="pageinterstellar">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+        <defs><radialGradient id="ltInterstellarRailGrad" cx="40%" cy="40%"><stop offset="0%" style="stop-color:#87CEEB;stop-opacity:0.9"/><stop offset="100%" style="stop-color:#6C63FF;stop-opacity:0.5"/></radialGradient></defs>
+        <circle cx="12" cy="13" r="6" fill="url(#ltInterstellarRailGrad)" stroke="#6C63FF" stroke-width="1.2" opacity="0.85"/>
+        <ellipse cx="12" cy="13" rx="8" ry="2.2" fill="none" stroke="#FFD700" stroke-width="0.9" opacity="0.65" transform="rotate(-18 12 13)"/>
+        <circle cx="6" cy="6" r="1" fill="#FFD700" opacity="0.9"/><circle cx="19" cy="7" r="0.7" fill="#fff" opacity="0.7"/><circle cx="17" cy="18" r="0.6" fill="#87CEEB" opacity="0.8"/>
+      </svg>
+      <span class="tip">Interstellar</span>
+    </div>
+    <div class="lt" id="lt-expand" onclick="swView('expand')" title="Expand" draggable="false" ondragover="handleExpandDragOver(event)" ondrop="handleExpandDrop(event)" ondragenter="handleExpandDragEnter(event)" ondragleave="handleExpandDragLeave(event)">
+      <svg width="30" height="30" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block" id="expand-icon-svg">
+        <!-- Dotted outline with empty space icon -->
+        <rect x="4" y="4" width="16" height="16" rx="2" fill="none" stroke="#6C63FF" stroke-width="2" stroke-dasharray="3 3" opacity="0.6"/>
+        <rect x="7" y="7" width="10" height="10" rx="1.5" fill="none" stroke="#87CEEB" stroke-width="1.5" stroke-dasharray="2 2" opacity="0.4"/>
+        <circle cx="12" cy="12" r="2" fill="none" stroke="#FFD700" stroke-width="1.5" stroke-dasharray="1.5 1.5" opacity="0.5"/>
+      </svg>
+      <span class="tip">Expand</span>
+    </div>
+    <div class="lt" id="lt-settings" onclick="swView('settings')" title="Settings" draggable="true" ondragstart="handlePageDragStart(event,'settings')" ondragend="handlePageDragEnd(event)" ondragover="handleLeftSidebarDragOver(event)" ondrop="handleLeftSidebarDrop(event,'settings')" ondragenter="handleLeftSidebarDragEnter(event)" ondragleave="handleLeftSidebarDragLeave(event)" data-page-id="settings">⚙️<span class="tip">Settings</span></div>
+    <div id="ls-ws"></div>
+    <div class="lt lt-add" onclick="addWS()" title="New workspace">+<span class="tip">New workspace</span></div>
+  </div>
+  <!-- Center -->
+  <div id="center">
+    <div id="top-bar">
+      <button class="tb-back" id="tb-back" onclick="goUp()">← Back</button>
+      <div class="tb-bc" id="tb-bc"><span class="tb-c on" onclick="goRoot()">Root</span></div>
+      <div class="tb-r">
+        <div class="tb-showby">
+          <div class="tb-showby-container">
+            <button class="tb-showby-btn" id="tb-showby-btn" onclick="toggleShowByDropdown(event)" title="Show by filter" style="display:flex;align-items:center;justify-content:center;padding:0">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+              <defs>
+                <linearGradient id="filterGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#6C63FF;stop-opacity:1"/>
+                  <stop offset="100%" style="stop-color:#8b84ff;stop-opacity:1"/>
+                </linearGradient>
+              </defs>
+              <!-- Funnel body -->
+              <path d="M22 3H2l8 9.46V19l4 2v-8.54L22 3z" fill="url(#filterGrad)" stroke="#6C63FF" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/>
+              <!-- Left side accent -->
+              <path d="M2 3l8 9.46" stroke="#8b84ff" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" opacity="0.7"/>
+              <!-- Decorative dots -->
+              <circle cx="6" cy="7" r="1.2" fill="#FFD700" opacity="0.9"/>
+              <circle cx="18" cy="7" r="1.2" fill="#FFD700" opacity="0.9"/>
+              <circle cx="12" cy="15" r="1" fill="#8b84ff" opacity="0.8"/>
+              <!-- Filter lines -->
+              <line x1="5" y1="5" x2="5" y2="7" stroke="#FFD700" stroke-width="1.2" stroke-linecap="round" opacity="0.8"/>
+              <line x1="19" y1="5" x2="19" y2="7" stroke="#FFD700" stroke-width="1.2" stroke-linecap="round" opacity="0.8"/>
+            </svg>
+          </button>
+            <button class="tb-showby-btn" id="tb-bring-edges-btn" onclick="toggleBringEdges()" title="Bring edges: show connected tasks" style="display:flex;align-items:center;justify-content:center;padding:0">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+              <defs>
+                <linearGradient id="networkGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#6C63FF;stop-opacity:1"/>
+                  <stop offset="100%" style="stop-color:#8b84ff;stop-opacity:1"/>
+                </linearGradient>
+                <linearGradient id="networkGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" style="stop-color:#8b84ff;stop-opacity:1"/>
+                  <stop offset="100%" style="stop-color:#6C63FF;stop-opacity:1"/>
+                </linearGradient>
+              </defs>
+              <!-- Network nodes with glow -->
+              <circle cx="8" cy="8" r="3.5" fill="url(#networkGrad1)" stroke="#6C63FF" stroke-width="1.2" opacity="0.9"/>
+              <circle cx="16" cy="8" r="3.5" fill="url(#networkGrad2)" stroke="#8b84ff" stroke-width="1.2" opacity="0.9"/>
+              <circle cx="8" cy="16" r="3.5" fill="url(#networkGrad2)" stroke="#8b84ff" stroke-width="1.2" opacity="0.9"/>
+              <circle cx="16" cy="16" r="3.5" fill="url(#networkGrad1)" stroke="#6C63FF" stroke-width="1.2" opacity="0.9"/>
+              <!-- Center dots -->
+              <circle cx="8" cy="8" r="1.2" fill="#FFD700" opacity="0.9"/>
+              <circle cx="16" cy="8" r="1.2" fill="#FFD700" opacity="0.9"/>
+              <circle cx="8" cy="16" r="1.2" fill="#FFD700" opacity="0.9"/>
+              <circle cx="16" cy="16" r="1.2" fill="#FFD700" opacity="0.9"/>
+              <!-- Connection lines with glow effect -->
+              <line x1="10.5" y1="8" x2="13.5" y2="8" stroke="#6C63FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+              <line x1="10.5" y1="8" x2="13.5" y2="8" stroke="#FFD700" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+              <line x1="8" y1="10.5" x2="8" y2="13.5" stroke="#6C63FF" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+              <line x1="8" y1="10.5" x2="8" y2="13.5" stroke="#FFD700" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+              <line x1="16" y1="10.5" x2="16" y2="13.5" stroke="#8b84ff" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+              <line x1="16" y1="10.5" x2="16" y2="13.5" stroke="#FFD700" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+              <line x1="10.5" y1="16" x2="13.5" y2="16" stroke="#8b84ff" stroke-width="2" stroke-linecap="round" opacity="0.8"/>
+              <line x1="10.5" y1="16" x2="13.5" y2="16" stroke="#FFD700" stroke-width="1" stroke-linecap="round" opacity="0.6"/>
+              <!-- Diagonal connections for more network feel -->
+              <line x1="10.5" y1="8" x2="10.5" y2="16" stroke="#6C63FF" stroke-width="1.5" stroke-linecap="round" opacity="0.5" stroke-dasharray="2 2"/>
+              <line x1="13.5" y1="8" x2="13.5" y2="16" stroke="#8b84ff" stroke-width="1.5" stroke-linecap="round" opacity="0.5" stroke-dasharray="2 2"/>
+            </svg>
+          </button>
+          </div>
+          <div class="tb-showby-menu" id="tb-showby-menu">
+            <div class="tb-showby-option" onclick="setShowByFilter(null)" data-filter="">All</div>
+            <div class="tb-showby-sep"></div>
+            <div class="tb-showby-option" onclick="setShowByFilter('routine')" data-filter="routine">Routine</div>
+            <div class="tb-showby-option" onclick="setShowByFilter('priority')" data-filter="priority">Priority</div>
+            <div class="tb-showby-option" onclick="setShowByFilter('buffer')" data-filter="buffer">Buffer</div>
+            <div class="tb-showby-option" onclick="setShowByFilter('tbd')" data-filter="tbd">TBD</div>
+            <div class="tb-showby-sep"></div>
+            <div id="tb-showby-categories"></div>
+          </div>
+        </div>
+        <button class="tb-btn" id="tb-priority" onclick="togPriority()" title="Toggle Priority Glow" style="display:flex;align-items:center;justify-content:center;padding:0">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+            <path d="M12 2 L14.5 9 L22 9 L16 13.5 L18.5 21 L12 16 L5.5 21 L8 13.5 L2 9 L9.5 9 Z" fill="#FFD700" stroke="#FF8C00" stroke-width="1.2"/>
+            <circle cx="12" cy="12" r="1.5" fill="#FF8C00"/>
+            <circle cx="9" cy="8" r="0.8" fill="#FFD700" opacity="0.8"/>
+            <circle cx="15" cy="8" r="0.8" fill="#FFD700" opacity="0.8"/>
+            <circle cx="10" cy="15" r="0.6" fill="#FF8C00" opacity="0.7"/>
+            <circle cx="14" cy="15" r="0.6" fill="#FF8C00" opacity="0.7"/>
+          </svg>
+        </button>
+        <span class="tb-lbl">Auto</span>
+        <button class="tb-lever on" id="tb-as" onclick="togAS()" title="Auto Save">
+          <svg width="42" height="42" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block">
+            <!-- Lever base/switch box -->
+            <rect x="4" y="8" width="16" height="8" rx="2" fill="#6C63FF" opacity="0.3" stroke="#6C63FF" stroke-width="1.5"/>
+            <rect x="4" y="8" width="16" height="8" rx="2" fill="#8b84ff" opacity="0.5"/>
+            <!-- Lever handle group (will be transformed) -->
+            <g class="lever-handle">
+              <rect x="14" y="6" width="4" height="12" rx="2" fill="#FFD700" stroke="#FF8C00" stroke-width="1.5"/>
+              <rect x="14.5" y="6.5" width="3" height="11" rx="1.5" fill="#FFED4E" opacity="0.8"/>
+            </g>
+            <!-- Decorative circles -->
+            <circle cx="6" cy="12" r="1" fill="#87CEEB" opacity="0.8"/>
+            <circle cx="10" cy="12" r="0.8" fill="#FF6B35" opacity="0.7"/>
+            <circle cx="18" cy="12" r="0.6" fill="#FFD700" class="lever-indicator"/>
+            <!-- Glow effect for on state -->
+            <circle cx="16" cy="12" r="3" fill="#FFD700" opacity="0.2" class="lever-glow"/>
+          </svg>
+        </button>
+        <button class="tb-btn" id="tb-undo" onclick="doUndo()" title="Undo (Ctrl+Z)" disabled>↶</button>
+        <button class="tb-btn" id="tb-redo" onclick="doRedo()" title="Redo (Ctrl+X)" disabled>↷</button>
+        <button class="tb-btn on" id="tb-tut" onclick="togTutorialNotes()" title="Tutorial notes: ON — hover hints explain controls (click to turn off)" style="display:flex;align-items:center;justify-content:center;padding:0"><svg width="72%" height="72%" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="display:block"><defs><linearGradient id="tutGrad" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#6C63FF"/><stop offset="100%" stop-color="#8b84ff"/></linearGradient></defs><path d="M4 3 H16 L20 7 V21 H4 Z" fill="url(#tutGrad)" stroke="#6C63FF" stroke-width="1.4" stroke-linejoin="round"/><path d="M16 3 V7 H20 Z" fill="#FFD700" stroke="#FF8C00" stroke-width="1" stroke-linejoin="round"/><text x="11" y="13" text-anchor="middle" font-family="Arial, sans-serif" font-size="3.5" font-weight="bold" fill="#fff" letter-spacing="0.2">TUTORIAL</text><rect x="6.5" y="15.4" width="11" height="1.05" rx="0.5" fill="#fff" opacity="0.6"/><rect x="6.5" y="17.9" width="8" height="1.05" rx="0.5" fill="#fff" opacity="0.45"/><circle cx="6.2" cy="6" r="0.9" fill="#FFD700" opacity="0.9"/></svg></button>
+        <button class="tb-btn" onclick="doSavepoint()" title="Ctrl+S" style="display:flex;align-items:center;justify-content:center;padding:0"><svg width="75%" height="75%" viewBox="0 0 16 16" style="display:block"><rect x="2" y="2" width="12" height="12" rx="0.8" fill="#87CEEB" stroke="#6B46C1" stroke-width="1.6"/><rect x="2" y="2" width="12" height="3.2" fill="#FFB6C1" stroke="#6B46C1" stroke-width="1.6"/><rect x="6.5" y="3" width="3" height="1.5" fill="#555" rx="0.2"/></svg></button>
+        <button class="tb-btn" onclick="swUser()" title="Exit" style="display:flex;align-items:center;justify-content:center;padding:0"><svg width="100%" height="100%" viewBox="0 0 16 16" style="display:block"><rect x="1.2" y="2.8" width="2.2" height="1.8" fill="#fff" rx="0.4"/><rect x="12.6" y="2.8" width="2.2" height="1.8" fill="#fff" rx="0.4"/><rect x="1.8" y="2.2" width="1" height="3.2" fill="#4169E1" rx="0.3"/><rect x="13.2" y="2.2" width="1" height="3.2" fill="#4169E1" rx="0.3"/><rect x="1.5" y="5.2" width="13" height="7.5" rx="1.8" fill="#FFF8DC" stroke="#DAA520" stroke-width="0.9"/><text x="8" y="10.2" text-anchor="middle" font-family="Arial, sans-serif" font-size="5.8" font-weight="bold" fill="#FF69B4" stroke="#8B4513" stroke-width="0.45">EXIT</text></svg></button>
+      </div>
+    </div>
+    <div id="canvas">
+      <div id="settings-view" style="display:none;height:100%;flex-direction:column;overflow-y:auto;overflow-x:hidden;min-height:0;max-height:100vh;position:relative;z-index:1;padding:20px">
+        <h2 style="font-size:24px;font-weight:600;margin:0 0 30px 0">Settings</h2>
+        <div style="max-width:600px;padding-bottom:40px">
+          <div class="fg" style="margin-bottom:24px">
+            <label class="lbl" style="font-size:16px;font-weight:600;margin-bottom:12px">Display Name</label>
+            <input class="inp" id="st-dn" placeholder="Your name..." style="font-size:15px">
+          </div>
+          <div class="fg" style="margin-bottom:24px">
+            <label class="lbl" style="font-size:16px;font-weight:600;margin-bottom:12px">Account Info</label>
+            <div id="st-account" style="padding:12px;background:var(--bg2);border-radius:7px;border:1px solid var(--bdr);color:var(--t2);font-size:13px">User: Guest</div>
+          </div>
+          <div class="fg" style="margin-bottom:24px">
+            <label class="lbl" style="font-size:16px;font-weight:600;margin-bottom:12px">Auto Save</label>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="flex:1;font-size:14px;color:var(--t1)">Automatically save changes</span>
+              <button class="tb-tog" id="st-as" onclick="G.autoSave=!G.autoSave;document.getElementById('st-as').classList.toggle('on',G.autoSave);sv()"></button>
+            </div>
+          </div>
+          <div class="fg" style="margin-bottom:24px">
+            <label class="lbl" style="font-size:16px;font-weight:600;margin-bottom:12px">Sound Effects</label>
+            <div style="display:flex;align-items:center;gap:10px">
+              <span style="flex:1;font-size:14px;color:var(--t1)">Play sound effects for task completion</span>
+              <button class="tb-tog" id="st-sound" onclick="G.soundEffects=G.soundEffects===false;document.getElementById('st-sound').classList.toggle('on',G.soundEffects!==false);sv()"></button>
+            </div>
+          </div>
+          <div class="fg" style="margin-bottom:24px">
+            <label class="lbl" style="font-size:16px;font-weight:600;margin-bottom:12px">Theme</label>
+            <div style="display:flex;gap:12px;flex-wrap:wrap">
+              <div class="theme-option" onclick="setTheme('galaxy')" style="padding:16px 20px;border-radius:8px;border:2px solid var(--bdr);background:var(--bg2);cursor:pointer;flex:1;min-width:120px;text-align:center;transition:all .2s">
+                <div style="font-size:20px;margin-bottom:8px">🌌</div>
+                <div style="font-size:14px;font-weight:600">Galaxy</div>
+                <div style="font-size:12px;color:var(--t3);margin-top:4px">Default</div>
+              </div>
+              <div class="theme-option" onclick="setTheme('bright')" style="padding:16px 20px;border-radius:8px;border:2px solid var(--bdr);background:var(--bg2);cursor:pointer;flex:1;min-width:120px;text-align:center;transition:all .2s">
+                <div style="font-size:20px;margin-bottom:8px">☀️</div>
+                <div style="font-size:14px;font-weight:600">Bright</div>
+                <div style="font-size:12px;color:var(--t3);margin-top:4px">Light mode</div>
+              </div>
+            </div>
+          </div>
+          <div class="fg" style="margin-bottom:24px">
+            <label class="lbl" style="font-size:16px;font-weight:600;margin-bottom:12px">Background Color</label>
+            <div style="margin-bottom:16px">
+              <div style="font-size:13px;font-weight:600;color:var(--t2);margin-bottom:8px">Dark Colors</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <div class="bg-color-option" onclick="setBackgroundColor('#0a0e27')" style="width:50px;height:50px;border-radius:8px;background:#0a0e27;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="Deep Space"></div>
+                <div class="bg-color-option" onclick="setBackgroundColor('#1a1f3a')" style="width:50px;height:50px;border-radius:8px;background:#1a1f3a;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="Navy"></div>
+                <div class="bg-color-option" onclick="setBackgroundColor('#2d1b3d')" style="width:50px;height:50px;border-radius:8px;background:#2d1b3d;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="Purple"></div>
+                <div class="bg-color-option" onclick="setBackgroundColor('#1a2e1a')" style="width:50px;height:50px;border-radius:8px;background:#1a2e1a;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="Forest"></div>
+              </div>
+            </div>
+            <div>
+              <div style="font-size:13px;font-weight:600;color:var(--t2);margin-bottom:8px">Light Colors</div>
+              <div style="display:flex;gap:8px;flex-wrap:wrap">
+                <div class="bg-color-option" onclick="setBackgroundColor('#ffffff')" style="width:50px;height:50px;border-radius:8px;background:#ffffff;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="White"></div>
+                <div class="bg-color-option" onclick="setBackgroundColor('#f5f5dc')" style="width:50px;height:50px;border-radius:8px;background:#f5f5dc;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="Beige"></div>
+                <div class="bg-color-option" onclick="setBackgroundColor('#808080')" style="width:50px;height:50px;border-radius:8px;background:#808080;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="Grey"></div>
+                <div class="bg-color-option" onclick="setBackgroundColor('#d3d3d3')" style="width:50px;height:50px;border-radius:8px;background:#d3d3d3;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="Light Grey"></div>
+                <div class="bg-color-option" onclick="setBackgroundColor('#add8e6')" style="width:50px;height:50px;border-radius:8px;background:#add8e6;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="Light Blue"></div>
+                <div class="bg-color-option" onclick="setBackgroundColor('#b0e0e6')" style="width:50px;height:50px;border-radius:8px;background:#b0e0e6;cursor:pointer;border:2px solid var(--bdr);transition:all .2s" title="Baby Blue"></div>
+              </div>
+            </div>
+          </div>
+          <div class="fg" style="margin-bottom:24px">
+            <label class="lbl" style="font-size:16px;font-weight:600;margin-bottom:12px">Keyboard Shortcuts</label>
+            <div style="display:flex;flex-direction:column;gap:12px">
+              <div style="padding:12px;background:var(--bg3);border-radius:6px;border:1px solid var(--bdr);margin-bottom:8px">
+                <div style="font-size:13px;font-weight:600;color:var(--t0);margin-bottom:8px">View Navigation</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Tab: Switch pages (home → calendar → settings)</span>
+                    <input type="text" id="ks-tab" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Tab" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('tab',document.getElementById('ks-tab'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">`: Switch pages backward (home ← calendar ← settings)</span>
+                    <input type="text" id="ks-backtick" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="`" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('backtick',document.getElementById('ks-backtick'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Space: Center view (home/calendar/search)</span>
+                    <input type="text" id="ks-space" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Space" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('space',document.getElementById('ks-space'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Command/Ctrl key: Toggle bottom input box</span>
+                    <input type="text" id="ks-command-toggle" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Cmd/Ctrl" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('command-toggle',document.getElementById('ks-command-toggle'))">Change</button>
+                  </div>
+                </div>
+              </div>
+              
+              <div style="padding:12px;background:var(--bg3);border-radius:6px;border:1px solid var(--bdr);margin-bottom:8px">
+                <div style="font-size:13px;font-weight:600;color:var(--t0);margin-bottom:8px">Node Navigation</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Arrow Keys (↑↓←→): Navigate selector to closest node</span>
+                    <input type="text" id="ks-arrows" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="↑↓←→" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('arrows',document.getElementById('ks-arrows'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Space+Up: Go up a level</span>
+                    <input type="text" id="ks-space-up" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Space+↑" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('space-up',document.getElementById('ks-space-up'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Space+Down: Go down a level</span>
+                    <input type="text" id="ks-space-down" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Space+↓" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('space-down',document.getElementById('ks-space-down'))">Change</button>
+                  </div>
+                </div>
+              </div>
+              
+              <div style="padding:12px;background:var(--bg3);border-radius:6px;border:1px solid var(--bdr);margin-bottom:8px">
+                <div style="font-size:13px;font-weight:600;color:var(--t0);margin-bottom:8px">Node Interaction</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Enter: Open/Drill node (context-dependent)</span>
+                    <input type="text" id="ks-enter" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Enter" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('enter',document.getElementById('ks-enter'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Enter+Space: Toggle all nodes at current level</span>
+                    <input type="text" id="ks-enter-space" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Enter+Space" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('enter-space',document.getElementById('ks-enter-space'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Escape: Close modals/expanded nodes/go back</span>
+                    <input type="text" id="ks-escape" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Escape" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('escape',document.getElementById('ks-escape'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Backspace: Go up one level</span>
+                    <input type="text" id="ks-backspace" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Backspace" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('backspace',document.getElementById('ks-backspace'))">Change</button>
+                  </div>
+                </div>
+              </div>
+              
+              <div style="padding:12px;background:var(--bg3);border-radius:6px;border:1px solid var(--bdr);margin-bottom:8px">
+                <div style="font-size:13px;font-weight:600;color:var(--t0);margin-bottom:8px">File Operations</div>
+                <div style="display:flex;flex-direction:column;gap:8px">
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Ctrl/Cmd+S: Create savepoint</span>
+                    <input type="text" id="ks-save" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Ctrl+S" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('save',document.getElementById('ks-save'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Ctrl/Cmd+Z: Undo last action</span>
+                    <input type="text" id="ks-undo" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Ctrl+Z" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('undo',document.getElementById('ks-undo'))">Change</button>
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;padding:8px;background:var(--bg2);border-radius:4px">
+                    <span style="flex:1;font-size:13px;color:var(--t1)">Ctrl/Cmd+X: Redo</span>
+                    <input type="text" id="ks-redo" class="inp" style="width:100px;font-size:12px;padding:4px 8px" placeholder="Ctrl+X" readonly>
+                    <button class="btn btn-g" style="padding:4px 10px;font-size:11px" onclick="setShortcut('redo',document.getElementById('ks-redo'))">Change</button>
+                  </div>
+                </div>
+              </div>
+            </div>
+            <div style="margin-top:12px;padding:10px;background:var(--bg3);border-radius:6px;border:1px solid var(--bdr)">
+              <p style="font-size:12px;color:var(--t3);margin:0">Click "Change" and press the key combination you want to use. Press Escape to cancel.</p>
+            </div>
+          </div>
+          <div style="margin-top:30px;display:flex;gap:12px">
+            <button class="btn btn-p" onclick="saveSettings()">Save Settings</button>
+            <button class="btn btn-g" onclick="swView('home')">Close</button>
+          </div>
+        </div>
+      </div>
+      <div id="calendar-view" style="display:none;height:100%;flex-direction:column;overflow:hidden;min-height:0;position:relative;z-index:1">
+        <div id="calendar-header" style="display:flex;justify-content:space-between;align-items:center;padding:20px;border-bottom:1px solid var(--bdr);position:relative">
+          <button class="btn btn-g" onclick="calendarPrevWeek()">← Prev</button>
+          <div style="display:flex;align-items:center;gap:15px;position:relative;flex:1;justify-content:center">
+            <div id="calendar-search-box" style="display:none;position:absolute;left:0;top:50%;transform:translateY(-50%);z-index:1000;background:var(--bg1);border:2px solid var(--acc);border-radius:8px;padding:8px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);white-space:nowrap">
+              <div style="display:flex;align-items:center;gap:8px">
+                <input type="text" id="calendar-search-input" placeholder="Search events... (Enter to go to next)" autocomplete="off" style="flex:1;padding:8px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;color:var(--t0);font-size:14px;outline:none" oninput="handleCalendarSearch(this.value)" onkeydown="handleCalendarSearchKeydown(event)">
+                <span id="calendar-search-count" style="font-size:12px;color:var(--t2);min-width:60px;text-align:right;white-space:nowrap"></span>
+              </div>
+            </div>
+            <div id="calendar-tbd-tabs-container" style="position:absolute;left:0;right:0;top:0;bottom:0;pointer-events:none;z-index:10"></div>
+            <h3 id="calendar-week-title" style="font-size:18px;font-weight:600;margin:0;position:relative;z-index:1"></h3>
+            <div style="position:relative">
+              <button id="calendar-timezone-btn" class="btn btn-g" onclick="toggleTimezoneDropdown()" style="font-size:13px;padding:6px 12px">
+                <span id="calendar-timezone-display">EST</span> ▼
+              </button>
+              <div id="calendar-timezone-dropdown" style="display:none;position:absolute;top:100%;left:0;margin-top:4px;background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--rad);box-shadow:0 4px 12px rgba(0,0,0,.2);z-index:200;min-width:150px;max-height:300px;overflow-y:auto">
+                <div class="tz-option" onclick="setTimezone('America/New_York')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bdr)">EST (Eastern)</div>
+                <div class="tz-option" onclick="setTimezone('America/Chicago')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bdr)">CST (Central)</div>
+                <div class="tz-option" onclick="setTimezone('America/Denver')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bdr)">MST (Mountain)</div>
+                <div class="tz-option" onclick="setTimezone('America/Los_Angeles')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bdr)">PST (Pacific)</div>
+                <div class="tz-option" onclick="setTimezone('UTC')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bdr)">UTC</div>
+                <div class="tz-option" onclick="setTimezone('Europe/London')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bdr)">GMT (London)</div>
+                <div class="tz-option" onclick="setTimezone('Asia/Tokyo')" style="padding:8px 12px;cursor:pointer;border-bottom:1px solid var(--bdr)">JST (Tokyo)</div>
+                <div class="tz-option" onclick="setTimezone('Asia/Shanghai')" style="padding:8px 12px;cursor:pointer">CST (Shanghai)</div>
+              </div>
+            </div>
+            <div style="display:flex;flex-direction:column;gap:4px;align-items:center">
+              <button id="calendar-import-btn" class="btn btn-g" onclick="importMacCalendar()" style="font-size:13px;padding:6px 12px;position:relative" title="Import calendar events from ICS file (exported from Calendar.app) or JSON file">
+                <span style="display:inline-block;width:8px;height:8px;background:var(--red);border-radius:50%;margin-right:6px"></span>
+                Import
+              </button>
+              <div style="position:relative">
+                <button id="calendar-export-btn" class="btn btn-g" onclick="toggleExportCalendarDropdown()" style="font-size:13px;padding:6px 12px;position:relative" title="Export calendar events to ICS file">
+                  <span style="display:inline-block;width:8px;height:8px;background:#22c55e;border-radius:50%;margin-right:6px"></span>
+                  Export
+                </button>
+                <div id="calendar-export-dropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--rad);box-shadow:0 4px 12px rgba(0,0,0,.2);z-index:200;width:auto;min-width:max-content;overflow-y:auto;font-size:11px">
+                  <div class="tz-option" onclick="exportAllCalendarEvents()" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--bdr);white-space:nowrap">All</div>
+                  <div class="tz-option" onclick="startRangeSelection()" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--bdr);white-space:nowrap">Select Range</div>
+                  <div class="tz-option" onclick="startEventSelection()" style="padding:6px 10px;cursor:pointer;white-space:nowrap">Select Events</div>
+                </div>
+              </div>
+              <div style="position:relative">
+                <button id="calendar-findtime-btn" class="btn btn-g" onclick="toggleFindTimeDropdown()" style="font-size:13px;padding:6px 12px;position:relative" title="Find available time slots">
+                  <span style="display:inline-block;width:8px;height:8px;background:#eab308;border-radius:50%;margin-right:6px"></span>
+                  FindTime
+                </button>
+                <div id="calendar-findtime-dropdown" style="display:none;position:absolute;top:100%;right:0;margin-top:4px;background:var(--bg1);border:1px solid var(--bdr);border-radius:var(--rad);box-shadow:0 4px 12px rgba(0,0,0,.2);z-index:200;width:auto;min-width:max-content;overflow-y:auto;font-size:11px">
+                  <div class="tz-option" onclick="changeFindTimeRange()" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--bdr);white-space:nowrap">Time Range</div>
+                  <div class="tz-option" onclick="changeFindTimeFlex()" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--bdr);white-space:nowrap">Flex Bound</div>
+                  <div class="tz-option" onclick="changeFindTimeUnit()" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--bdr);white-space:nowrap">Unit Size: <span id="findtime-unit-display">30min</span></div>
+                  <div class="tz-option" onclick="confirmFindTime()" style="padding:6px 10px;cursor:pointer;border-bottom:1px solid var(--bdr);white-space:nowrap">Confirm</div>
+                  <div class="tz-option" onclick="cancelFindTime()" style="padding:6px 10px;cursor:pointer;white-space:nowrap">Cancel</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          <button class="btn btn-g" onclick="calendarNextWeek()">Next →</button>
+        </div>
+        <div id="calendar-scroll-container" style="flex:1;overflow-y:scroll!important;overflow-x:auto;position:relative;min-height:0;max-height:calc(100vh - 200px);height:calc(100vh - 200px);-webkit-overflow-scrolling:touch;touch-action:pan-x pan-y;overscroll-behavior:contain">
+          <div id="calendar-time-grid" style="position:relative"></div>
+        </div>
+      </div>
+      <div id="progress-view" style="display:none;height:100vh;flex-direction:column;overflow:hidden;position:relative;z-index:1">
+        <div id="progress-header" style="display:flex;justify-content:space-between;align-items:center;padding:20px;border-bottom:1px solid var(--bdr);flex-shrink:0;height:66px;box-sizing:border-box">
+          <h3 style="font-size:18px;font-weight:600;margin:0">My Cosmos</h3>
+        </div>
+        <div style="display:flex;flex:1;overflow:hidden;min-height:0;height:calc(100vh - 66px)">
+          <div id="progress-todo-list-container" style="width:300px;border-right:1px solid var(--bdr);background:var(--bg1);display:flex;flex-direction:column;height:100%;overflow:hidden;position:relative">
+            <h4 style="font-size:14px;font-weight:600;margin:20px 20px 12px 20px;color:var(--t1);flex-shrink:0">To-Do Tasks</h4>
+            <div id="progress-todo-list" style="position:absolute;top:52px;left:0;right:0;bottom:0;display:flex;flex-direction:column;gap:8px;overflow-y:auto;overflow-x:hidden;padding:0 20px 100px 20px;-webkit-overflow-scrolling:touch"></div>
+          </div>
+          <div id="progress-chart-container" style="flex:1;padding:20px 20px 200px 20px;overflow-y:auto;background:var(--bg1)">
+            <h4 style="font-size:14px;font-weight:600;margin-bottom:12px;color:var(--t1)">Progress Bars</h4>
+            <svg id="progress-chart-svg" style="width:100%;min-height:400px"></svg>
+          </div>
+        </div>
+      </div>
+      <div id="notes-view" style="display:none;height:100%;flex-direction:row;overflow:hidden;min-height:0;position:absolute;top:0;left:0;right:0;bottom:0;z-index:1">
+        <!-- Search box for notes -->
+        <div id="notes-search-box" style="display:none;position:absolute;right:20px;top:20px;z-index:1000;background:var(--bg1);border:2px solid var(--acc);border-radius:8px;padding:8px 12px;box-shadow:0 4px 12px rgba(0,0,0,0.3);white-space:nowrap">
+          <div style="display:flex;align-items:center;gap:8px">
+            <input type="text" id="notes-search-input" placeholder="Search notes..." autocomplete="off" style="flex:1;padding:8px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;color:var(--t0);font-size:14px;outline:none" oninput="handleNotesSearch(this.value)" onkeydown="if(event.key==='Escape'){hideNotesSearch()}">
+            <span id="notes-search-count" style="font-size:12px;color:var(--t2);min-width:60px;text-align:right;white-space:nowrap"></span>
+          </div>
+        </div>
+        <!-- Left sidebar for tasks with notes -->
+        <div id="notes-left-bar-container" style="display:flex;flex-shrink:0;height:100%;position:relative">
+          <div id="notes-left-bar" style="width:360px;background:var(--bg1);border-right:1px solid var(--bdr);display:flex;flex-direction:column;overflow:hidden;height:100%">
+            <div style="padding:16px;border-bottom:1px solid var(--bdr);flex-shrink:0">
+              <h3 style="font-size:16px;font-weight:600;margin:0;color:var(--t0)">Tasks with Notes</h3>
+            </div>
+            <div id="notes-all-notes-tab" onclick="notesCloseEditor()" style="padding:12px 16px;border-bottom:1px solid var(--bdr);flex-shrink:0;cursor:pointer;transition:all .15s;background:var(--bg2);display:flex;align-items:center;gap:8px">
+              <h3 style="font-size:16px;font-weight:600;margin:0;color:var(--acc);flex:1">All Notes Catalog</h3>
+              <span id="notes-all-notes-tab-count" style="font-size:12px;color:var(--t3);font-weight:500;white-space:nowrap"></span>
+              <button id="notes-sidebar-expand-all-btn" onclick="event.stopPropagation();toggleAllNotesGroups()" onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background='transparent'" style="width:24px;height:24px;display:flex;align-items:center;justify-content:center;background:transparent;border:none;border-radius:4px;cursor:pointer;color:var(--t2);transition:all 0.15s;padding:0;flex-shrink:0" title="Expand/Collapse All Notes">
+                <svg id="notes-sidebar-expand-all-icon" width="14" height="14" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="transition:transform 0.2s">
+                  <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+              </button>
+            </div>
+            <div id="notes-task-list" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:8px;min-height:0;-webkit-overflow-scrolling:touch">
+              <!-- Tasks with notes will be rendered here -->
+              <!-- +New Note item will be added here by renderNotes() -->
+            </div>
+          </div>
+          <div id="notes-left-bar-resizer" style="width:4px;background:var(--bdr);cursor:col-resize;flex-shrink:0;position:relative;z-index:10;transition:background 0.2s" onmouseenter="this.style.background='var(--acc)'" onmouseleave="this.style.background='var(--bdr)'"></div>
+        </div>
+        <!-- Main catalog/editor area -->
+        <div id="notes-main-area" style="flex:1;display:flex;flex-direction:column;overflow:hidden;position:relative;height:100%;min-height:0">
+          <!-- Catalog view -->
+          <div id="notes-catalog" style="flex:1;overflow-y:auto;overflow-x:hidden;padding:20px;display:block;min-height:0;-webkit-overflow-scrolling:touch">
+            <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:20px;flex-wrap:wrap;gap:12px">
+              <div style="display:flex;align-items:center;gap:8px">
+                <h2 style="font-size:20px;font-weight:600;margin:0;color:var(--t0)">Notes Catalog</h2>
+                <button id="notes-catalog-expand-all-btn" onclick="toggleAllNotesGroups()" style="width:28px;height:28px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--bdr);border-radius:5px;cursor:pointer;color:var(--t2);transition:all 0.15s;padding:0;flex-shrink:0" title="Expand/Collapse All Groups">
+                  <svg id="notes-catalog-expand-all-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="transition:transform 0.2s">
+                    <path d="M6 9L12 15L18 9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+              </div>
+              <div style="display:flex;align-items:center;gap:8px">
+                <label style="font-size:13px;color:var(--t2);white-space:nowrap">Sort by:</label>
+                <select id="notes-sort-select" onchange="handleNotesSortChange(this.value)" style="padding:6px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t0);font-size:13px;outline:none;cursor:pointer;min-width:180px">
+                  <option value="nested">Nested Structure</option>
+                  <option value="dateAdded">Date Added</option>
+                  <option value="noteEventDate">Date Note Added</option>
+                  <option value="completed">Event Completed</option>
+                  <option value="connected">Connected Tasks</option>
+                </select>
+                <button type="button" id="notes-sort-reverse-btn" onclick="toggleNotesSortReverse()" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t2);cursor:pointer;transition:all var(--tr);padding:0" title="Reverse the current sort order">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="transition:transform 0.2s">
+                    <path d="M12 19V5M12 5l-4 4M12 5l4 4" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                  </svg>
+                </button>
+                <button id="notes-group-by-task-btn" onclick="toggleNotesGroupByTask()" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;color:var(--t2);cursor:pointer;font-size:18px;transition:all var(--tr);padding:0" title="Group by Task">
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style="transition:all var(--tr)">
+                    <path d="M3 6H21M3 12H21M3 18H21" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+                    <path d="M3 6H21M3 12H21M3 18H21" stroke="currentColor" stroke-width="2" stroke-linecap="round" opacity="0.3"/>
+                    <rect x="4" y="4" width="4" height="4" rx="1" fill="currentColor" opacity="0.6"/>
+                    <rect x="4" y="10" width="4" height="4" rx="1" fill="currentColor" opacity="0.6"/>
+                    <rect x="4" y="16" width="4" height="4" rx="1" fill="currentColor" opacity="0.6"/>
+                  </svg>
+                </button>
+                <button type="button" id="notes-catalog-hide-completed-btn" onclick="toggleNotesCatalogHideCompletedNotes()" style="width:36px;height:36px;display:flex;align-items:center;justify-content:center;background:var(--bg2);border:1px solid var(--bdr);border-radius:6px;cursor:pointer;font-size:16px;transition:all var(--tr);padding:0;line-height:1" title="Notes from completed tasks are hidden — click to show them">✦</button>
+              </div>
+            </div>
+            <div id="notes-catalog-list">
+              <!-- Catalog items will be rendered here -->
+            </div>
+          </div>
+          <!-- Rich text editor view (hidden by default) -->
+          <div id="notes-editor" style="flex:1;display:none;flex-direction:column;overflow:hidden;background:var(--bg0);min-height:0;height:100%;position:relative">
+            <div id="notes-editor-toolbar" style="position:relative;padding:12px 52px 12px 16px;border-bottom:1px solid var(--bdr);background:var(--bg1);display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0">
+              <button class="notes-toolbar-btn" id="notes-undo" onclick="doUndo()" title="Undo (Ctrl+Z)">↶</button>
+              <button class="notes-toolbar-btn" id="notes-redo" onclick="doRedo()" title="Redo (Ctrl+Y)">↷</button>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <button class="notes-toolbar-btn" onclick="notesFormat('bold')" title="Bold">B</button>
+              <button class="notes-toolbar-btn" onclick="notesFormat('italic')" title="Italic">I</button>
+              <button class="notes-toolbar-btn" onclick="notesFormat('underline')" title="Underline">U</button>
+              <button class="notes-toolbar-btn" onclick="notesFormat('strikeThrough')" title="Strikethrough (cross off)">S̶</button>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <select class="notes-toolbar-select" id="notes-font-family" onchange="notesFormat('fontName',this.value)" title="Font">
+                <option value="Arial">Arial</option>
+                <option value="Times New Roman">Times New Roman</option>
+                <option value="Calibri">Calibri</option>
+                <option value="Courier New">Courier New</option>
+                <option value="Georgia">Georgia</option>
+                <option value="Verdana">Verdana</option>
+              </select>
+              <div style="display:flex;align-items:center;gap:2px">
+                <button class="notes-toolbar-btn" onclick="notesFontSizeChange(-1)" title="Decrease font size">−</button>
+                <span id="notes-font-size-display" ondblclick="notesFontSizeEditStart(event)" title="Double-click to type size" style="min-width:32px;text-align:center;font-size:12px;padding:4px 6px;background:var(--bg2);border:1px solid var(--bdr);border-radius:4px;cursor:text;user-select:none">12</span>
+                <button class="notes-toolbar-btn" onclick="notesFontSizeChange(1)" title="Increase font size">+</button>
+              </div>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <input type="color" class="notes-toolbar-color" id="notes-font-color" onchange="notesFormat('foreColor',this.value)" title="Text Color" value="#f0f2f5">
+              <input type="color" class="notes-toolbar-color" id="notes-bg-color" onchange="notesFormat('backColor',this.value)" title="Background Color" value="#0b0d14">
+              <button class="notes-toolbar-btn" onclick="notesInvertTextColor()" title="Flip text color (white→black, black→white, light↔dark)">⟲</button>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <div class="notes-bullet-dropdown">
+                <button class="notes-bullet-dropdown-btn" onmousedown="saveNotesBulletSelection()" onclick="handleBulletButtonClick(event)" title="Bullet List">•</button>
+                <div class="notes-bullet-dropdown-menu" id="bullet-dropdown-menu">
+                  <div class="notes-bullet-option" onclick="notesInsertBullet('disc')">
+                    <span class="notes-bullet-option-icon">•</span>
+                    <span class="notes-bullet-option-label">Disc</span>
+                  </div>
+                  <div class="notes-bullet-option" onclick="notesInsertBullet('circle')">
+                    <span class="notes-bullet-option-icon">○</span>
+                    <span class="notes-bullet-option-label">Circle</span>
+                  </div>
+                  <div class="notes-bullet-option" onclick="notesInsertBullet('square')">
+                    <span class="notes-bullet-option-icon">■</span>
+                    <span class="notes-bullet-option-label">Square</span>
+                  </div>
+                  <div class="notes-bullet-option" onclick="notesInsertBullet('dash')">
+                    <span class="notes-bullet-option-icon">—</span>
+                    <span class="notes-bullet-option-label">Dash</span>
+                  </div>
+                  <div class="notes-bullet-option" onclick="notesInsertNumberedList()">
+                    <span class="notes-bullet-option-icon">1.</span>
+                    <span class="notes-bullet-option-label">Numbered List</span>
+                  </div>
+                </div>
+              </div>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <button class="notes-toolbar-btn" id="notes-format-btn" onclick="notesFormatCopy()" title="Copy Format (select text, click to copy format, then select other text and click again to apply)">📋 Format</button>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <div class="notes-bullet-dropdown">
+                <button class="notes-bullet-dropdown-btn" id="notes-page-bg-btn" onclick="toggleNotesPageBgDropdown(event)" title="Page background color" style="width:auto;padding:6px 10px">
+                  <span id="notes-page-bg-preview" style="display:inline-block;width:18px;height:18px;border-radius:4px;background:var(--bg2);border:1px solid var(--bdr);vertical-align:middle;margin-right:4px"></span>▢
+                </button>
+                <div class="notes-bullet-dropdown-menu" id="notes-page-bg-dropdown" style="min-width:220px">
+                  <div style="margin-bottom:8px;font-size:11px;color:var(--t2)">Page background</div>
+                  <div id="notes-page-bg-swatches" style="display:grid;grid-template-columns:repeat(6,1fr);gap:6px;margin-bottom:10px"></div>
+                  <div style="margin-bottom:4px;font-size:11px;color:var(--t2)">Other colors</div>
+                  <input type="color" id="notes-page-bg-custom" onchange="applyNotesPageBg(this.value)" title="Pick any color" style="width:100%;height:32px;cursor:pointer;border:none;background:transparent;border-radius:4px;margin-bottom:10px">
+                  <div style="margin-bottom:4px;font-size:11px;color:var(--t2)">Transparency (0%=solid, 100%=galaxy)</div>
+                  <input type="range" id="notes-page-bg-alpha" min="0" max="100" value="0" style="width:100%;margin-bottom:8px" oninput="document.getElementById('notes-page-bg-alpha-val').textContent=this.value+'%'" onchange="applyNotesPageBgAlpha(this.value)">
+                  <span id="notes-page-bg-alpha-val" style="font-size:11px;color:var(--t2)">0%</span>
+                </div>
+              </div>
+              <div class="notes-bullet-dropdown">
+                <button class="notes-bullet-dropdown-btn" id="notes-line-spacing-btn" onclick="toggleNotesLineSpacingDropdown(event)" title="Line spacing" style="width:auto;padding:6px 10px">≡</button>
+                <div class="notes-bullet-dropdown-menu" id="notes-line-spacing-dropdown" style="min-width:150px">
+                  <div class="notes-bullet-option" onclick="notesSetLineSpacing('0')">0 (tight)</div>
+                  <div class="notes-bullet-option" onclick="notesSetLineSpacing('0.3')">0.3</div>
+                  <div class="notes-bullet-option" onclick="notesSetLineSpacing('0.5')">0.5</div>
+                  <div class="notes-bullet-option" onclick="notesSetLineSpacing('0.8')">0.8</div>
+                  <div class="notes-bullet-option" onclick="notesSetLineSpacing('1')">1</div>
+                  <div class="notes-bullet-option" onclick="notesSetLineSpacing('2')">2 (double)</div>
+                </div>
+              </div>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <button class="notes-toolbar-btn" onclick="notesFormat('justifyLeft')" title="Align Left">◀</button>
+              <button class="notes-toolbar-btn" onclick="notesFormat('justifyCenter')" title="Align Center">⬌</button>
+              <button class="notes-toolbar-btn" onclick="notesFormat('justifyRight')" title="Align Right">▶</button>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <button class="notes-toolbar-btn" onclick="notesInsertLink()" title="Insert Link">🔗</button>
+              <button class="notes-toolbar-btn" onclick="notesInsertImage()" title="Insert Image">🖼️</button>
+              <button class="notes-toolbar-btn" onclick="notesInsertAudio()" title="Insert Audio">🎵</button>
+              <button class="notes-toolbar-btn" onclick="notesInsertVideo()" title="Insert Video">🎬</button>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <button class="notes-toolbar-btn" id="notes-slide-mode-btn" onclick="toggleNotesSlideMode()" title="Slide mode (shapes, text boxes)">📽️</button>
+              <div style="flex:1"></div>
+              <button class="notes-toolbar-btn" onclick="openPdfExportModal()" title="Export to PDF">📄 PDF</button>
+              <button class="notes-toolbar-btn notes-close-btn" onclick="notesCloseEditor()" title="Close Editor">✕</button>
+            </div>
+            <div id="notes-slide-toolbar" style="display:none;position:relative;padding:12px 16px;border-bottom:1px solid var(--bdr);background:var(--bg2);align-items:center;gap:8px;flex-wrap:wrap;flex-shrink:0">
+              <div style="display:flex;align-items:center;gap:4px">
+                <button class="notes-toolbar-btn notes-slide-tool" data-tool="select" onclick="setNotesSlideTool('select')" title="Select / Move">↖</button>
+                <button class="notes-toolbar-btn notes-slide-tool" data-tool="line" onclick="setNotesSlideTool('line')" title="Line">∕</button>
+                <button class="notes-toolbar-btn notes-slide-tool" data-tool="rect" onclick="setNotesSlideTool('rect')" title="Rectangle">▭</button>
+                <button class="notes-toolbar-btn notes-slide-tool" data-tool="ellipse" onclick="setNotesSlideTool('ellipse')" title="Ellipse">⬭</button>
+                <button class="notes-toolbar-btn notes-slide-tool" data-tool="arrow" onclick="setNotesSlideTool('arrow')" title="Arrow">→</button>
+                <button class="notes-toolbar-btn notes-slide-tool" data-tool="text" onclick="setNotesSlideTool('text')" title="Add Text Box (click on canvas)">T</button>
+              </div>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <div style="display:flex;align-items:center;gap:6px">
+                <span style="font-size:11px;color:var(--t2);font-weight:600">Text</span>
+                <button class="notes-toolbar-btn" id="notes-slide-bold" onclick="notesFormat('bold')" title="Bold">B</button>
+                <button class="notes-toolbar-btn" id="notes-slide-italic" onclick="notesFormat('italic')" title="Italic">I</button>
+                <button class="notes-toolbar-btn" id="notes-slide-underline" onclick="notesFormat('underline')" title="Underline">U</button>
+                <select class="notes-toolbar-select" id="notes-slide-font-family" onchange="notesFormat('fontName',this.value)" title="Font" style="max-width:110px">
+                  <option value="Arial">Arial</option>
+                  <option value="Times New Roman">Times New Roman</option>
+                  <option value="Calibri">Calibri</option>
+                  <option value="Courier New">Courier New</option>
+                  <option value="Georgia">Georgia</option>
+                  <option value="Verdana">Verdana</option>
+                </select>
+                <select class="notes-toolbar-select" id="notes-slide-font-size" onchange="notesFormat('fontSize',this.value)" title="Font Size">
+                  <option value="1">8pt</option>
+                  <option value="2">10pt</option>
+                  <option value="3" selected>12pt</option>
+                  <option value="4">14pt</option>
+                  <option value="5">18pt</option>
+                  <option value="6">24pt</option>
+                  <option value="7">36pt</option>
+                </select>
+              </div>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <div class="notes-slide-color-row">
+                <span style="font-size:11px;color:var(--t2);margin-right:2px" title="Text color">A</span>
+                <div class="notes-slide-color-dropdown" id="notes-slide-font-color-dropdown">
+                  <button type="button" class="notes-toolbar-btn" onclick="toggleNotesSlideColorDropdown('font')" title="Text color" style="padding:4px 8px;min-width:36px">
+                    <span id="notes-slide-font-color-preview" style="display:inline-block;width:18px;height:18px;border-radius:4px;background:#f0f2f5;border:1px solid var(--bdr)"></span>
+                  </button>
+                  <div class="notes-slide-color-palette" id="notes-slide-font-color-palette">
+                    <div style="grid-column:1/-1;margin-bottom:6px;font-size:10px;color:var(--t2)">Text color</div>
+                    <div id="notes-slide-font-color-swatches" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-bottom:8px"></div>
+                    <input type="color" id="notes-slide-font-color" onchange="notesFormat('foreColor',this.value);updateNotesSlideColorPreview('font',this.value);closeNotesSlideColorDropdowns()" title="More colors" style="grid-column:1/-1;width:100%;height:32px;cursor:pointer;border:none;background:transparent;border-radius:4px">
+                  </div>
+                </div>
+              </div>
+              <div class="notes-slide-color-row">
+                <span style="font-size:11px;color:var(--t2);margin-right:2px" title="Highlight">▢</span>
+                <div class="notes-slide-color-dropdown" id="notes-slide-bg-color-dropdown">
+                  <button type="button" class="notes-toolbar-btn" onclick="toggleNotesSlideColorDropdown('bg')" title="Highlight / Background color" style="padding:4px 8px;min-width:36px">
+                    <span id="notes-slide-bg-color-preview" style="display:inline-block;width:18px;height:18px;border-radius:4px;background:#0b0d14;border:1px solid var(--bdr)"></span>
+                  </button>
+                  <div class="notes-slide-color-palette" id="notes-slide-bg-color-palette">
+                    <div style="grid-column:1/-1;margin-bottom:6px;font-size:10px;color:var(--t2)">Highlight</div>
+                    <div id="notes-slide-bg-color-swatches" style="grid-column:1/-1;display:grid;grid-template-columns:repeat(8,1fr);gap:4px;margin-bottom:8px"></div>
+                    <input type="color" id="notes-slide-bg-color" onchange="notesFormat('backColor',this.value);updateNotesSlideColorPreview('bg',this.value);closeNotesSlideColorDropdowns()" title="More colors" style="grid-column:1/-1;width:100%;height:32px;cursor:pointer;border:none;background:transparent;border-radius:4px">
+                  </div>
+                </div>
+              </div>
+              <div style="width:1px;height:24px;background:var(--bdr);margin:0 4px"></div>
+              <button class="notes-toolbar-btn" onclick="notesFormat('justifyLeft')" title="Align Left">◀</button>
+              <button class="notes-toolbar-btn" onclick="notesFormat('justifyCenter')" title="Align Center">⬌</button>
+              <button class="notes-toolbar-btn" onclick="notesFormat('justifyRight')" title="Align Right">▶</button>
+              <div style="flex:1"></div>
+              <button class="notes-toolbar-btn" onclick="toggleNotesSlideMode()" title="Exit slide mode">Exit</button>
+            </div>
+            <div id="notes-editor-wrapper" style="flex:1;position:relative;overflow:hidden;display:flex;min-height:0;background:var(--bg2)">
+              <div class="notes-margin-control left" id="notes-margin-left" onmousedown="startMarginDrag(event, 'left')" title="Drag to set where page content starts">
+                <div class="notes-margin-control-handle"></div>
+              </div>
+              <div id="notes-editor-scroll" style="flex:1;overflow-y:auto;overflow-x:hidden;position:relative;min-height:0;display:flex;flex-direction:column;background:var(--bg2)">
+                <div id="notes-galaxy-bg" class="notes-galaxy-bg" style="display:none;position:absolute;inset:0;pointer-events:none;z-index:0;overflow:hidden"></div>
+                <div id="notes-description-section" style="display:none;flex-direction:column;padding:20px 20px 0 20px;position:relative;z-index:1">
+                  <div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.5px;margin-bottom:6px">Note</div>
+                  <div id="notes-description-content" contenteditable="true" style="min-height:60px;padding:12px;background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;color:var(--t0);font-size:14px;line-height:1.6;outline:none;word-wrap:break-word"></div>
+                  <div style="display:flex;align-items:center;gap:10px;margin-top:14px;margin-bottom:4px">
+                    <div style="flex:1;height:1px;background:var(--bdr)"></div>
+                    <div style="font-size:11px;font-weight:600;color:var(--t3);text-transform:uppercase;letter-spacing:0.5px">Post-event Note</div>
+                    <div style="flex:1;height:1px;background:var(--bdr)"></div>
+                  </div>
+                </div>
+                <div id="notes-editor-content" contenteditable="true" ondragenter="event.preventDefault();if(event.dataTransfer.types.includes('Files'))event.dataTransfer.dropEffect='copy'" ondragover="event.preventDefault();event.dataTransfer.dropEffect='copy'" ondrop="handleNoteEditorDrop(event)" style="flex:1;min-height:100%;padding:20px;background:var(--bg2);color:var(--t0);font-size:14px;line-height:1.6;outline:none;word-wrap:break-word;-webkit-overflow-scrolling:touch;margin-left:0;margin-right:0;transition:margin-left .1s,margin-right .1s;position:relative;z-index:1">
+                  <!-- Rich text editor content -->
+                </div>
+                <div id="notes-slide-layer" style="display:none;position:absolute;top:0;left:0;width:100%;height:100px;pointer-events:none;z-index:5;overflow:visible"></div>
+              </div>
+              <button type="button" id="notes-slide-delete-btn" onclick="deleteSelectedSlideObjects()" style="display:none;position:absolute;z-index:15;top:8px;right:8px;padding:6px 12px;background:var(--bg3);border:1px solid var(--bdr);border-radius:6px;color:var(--t0);cursor:pointer;font-size:12px;box-shadow:0 2px 8px rgba(0,0,0,.3)" title="Delete selected">Delete</button>
+              <div class="notes-margin-control right" id="notes-margin-right" onmousedown="startMarginDrag(event, 'right')" title="Drag to set where page content ends">
+                <div class="notes-margin-control-handle"></div>
+              </div>
+            </div>
+            <div id="notes-editor-nav-icons">
+              <div id="notes-nav-calendar" class="notes-nav-icon disabled" title="Jump to calendar" onclick="notesNavToCalendar()">📅</div>
+              <div id="notes-nav-home" class="notes-nav-icon disabled" title="Jump to home" onclick="notesNavToHome()">🏠</div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="expand-view" style="display:none;height:100%;flex-direction:column;overflow-y:auto;overflow-x:hidden;min-height:0;position:relative;z-index:1;padding:20px">
+        <div id="expand-header" style="display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:15px;border-bottom:1px solid var(--bdr)">
+          <h3 style="font-size:20px;font-weight:600;margin:0">Expand</h3>
+          <div style="font-size:13px;color:var(--t2);max-width:28rem;line-height:1.45">Tree, Agents, and Interstellar start here while in development — drag any page onto Expand or the rail to rearrange.</div>
+        </div>
+        <div id="expand-content" style="display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:20px;padding:10px 0">
+          <!-- Pages will be rendered here -->
+        </div>
+      </div>
+      <div id="pagetree-view" style="display:none;height:100%;flex-direction:column;overflow:hidden;min-height:0;position:relative;z-index:1">
+        <div id="pagetree-header" style="display:flex;justify-content:space-between;align-items:center;padding:20px;border-bottom:1px solid var(--bdr);background:var(--bg1)">
+          <div style="display:flex;align-items:center;gap:15px;flex-wrap:wrap;min-width:0">
+            <h3 style="font-size:18px;font-weight:600;margin:0">Tree</h3>
+            <label style="font-size:13px;color:var(--t2);font-weight:normal;max-width:36rem;line-height:1.45">Hierarchical tree of your current Home context (same nesting as on the graph). Drag to pan, scroll to zoom. Click a node to open it on Home; click the top bar to jump to the workspace root.</label>
+          </div>
+          <button type="button" class="btn btn-g" onclick="renderPageTree()" style="font-size:13px;padding:6px 12px;flex-shrink:0">Refresh</button>
+        </div>
+        <div style="flex:1;position:relative;overflow:hidden">
+          <svg id="pagetree-svg" style="width:100%;height:100%;position:relative;z-index:1"></svg>
+        </div>
+      </div>
+      <div id="pageagents-view" class="pageagents-view-root" style="display:none;flex:1;flex-direction:column;min-height:0;height:100%;position:relative;z-index:3;overflow-y:auto;overflow-x:hidden;-webkit-overflow-scrolling:touch">
+        <div id="pageagents-header" style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px;border-bottom:1px solid var(--bdr);background:var(--bg1)">
+          <div style="min-width:0">
+            <h3 style="font-size:18px;font-weight:600;margin:0">Agents</h3>
+            <label style="display:block;font-size:13px;color:var(--t2);font-weight:normal;margin-top:8px;max-width:42rem;line-height:1.45">Crew deck playground for quick model replies. Tokens stay in this browser unless you call an external API. Per-user runs and collaboration context are saved under <code style="font-size:12px">data/your-username/agents/</code> when you use the bundled server.</label>
+          </div>
+          <button type="button" id="pageagents-timecapsule-btn" onclick="pageAgentsToggleTimeCapsule()" aria-pressed="false" title="Time capsule — remember the current chat windows + conversations so they reappear after refresh / logout / login" aria-label="Time capsule" style="flex:0 0 auto;background:transparent;border:0;padding:5px;margin-left:12px;cursor:pointer;line-height:0;border-radius:8px;align-self:flex-start">
+            <svg id="pageagents-timecapsule-svg" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="var(--t3)" stroke-width="1.8" stroke-linecap="round" style="color:var(--t3);opacity:0.55;transition:opacity .15s,filter .15s">
+              <g transform="rotate(-45 12 12)">
+                <rect x="3.5" y="9" width="17" height="6" rx="3" fill="none"></rect>
+                <line x1="12" y1="9" x2="12" y2="15"></line>
+              </g>
+            </svg>
+          </button>
+        </div>
+        <div id="pageagents-body" class="pageagents-body">
+          <div class="pageagents-main-grid">
+            <section class="pageagents-col pageagents-col-deck" aria-label="Crew deck — playground for agents">
+              <div class="pageagents-sec-hdr" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span>Crew deck — playground for agents</span>
+                <button type="button" id="pageagents-crew-chooser-btn" style="background:transparent;border:0;padding:2px 4px;font-size:18px;line-height:1;cursor:pointer;color:inherit;border-radius:6px" onclick="pageAgentsToggleCrewChooser()" title="Settings — manage your agents and load list" aria-label="Agent settings">⚙️</button>
+              </div>
+              <div id="pageagents-play" class="pageagents-play-outer">
+                <div id="pageagents-crew-chooser-panel" style="display:none;position:absolute;inset:0;z-index:50;background:linear-gradient(180deg,rgba(11,13,20,.96),rgba(17,21,39,.96));backdrop-filter:blur(2px);overflow:auto;padding:14px"></div>
+                <div id="pageagents-crew-search-box" style="display:none;position:absolute;top:10px;left:50%;transform:translateX(-50%);z-index:60;background:var(--bg1);border:1px solid var(--bdr);border-radius:8px;padding:6px 8px;box-shadow:0 4px 18px rgba(0,0,0,0.4);align-items:center;gap:8px">
+                  <span style="font-size:12px;color:var(--t2)">🔍</span>
+                  <input id="pageagents-crew-search-input" type="text" placeholder="Search agent by name…" oninput="handleAgentsSearch(this.value)" onkeydown="onAgentsSearchKeydown(event)" autocomplete="off" style="background:var(--bg2);color:var(--t1);border:1px solid var(--bdr);border-radius:6px;padding:6px 8px;font-size:13px;width:240px;outline:none">
+                  <span id="pageagents-crew-search-status" style="font-size:12px;color:var(--t2);min-width:54px;text-align:right"></span>
+                  <button type="button" onclick="hideAgentsSearch()" title="Close (Esc)" style="background:transparent;border:0;padding:2px 4px;font-size:14px;line-height:1;cursor:pointer;color:var(--t2)">✕</button>
+                </div>
+                <div id="pageagents-play-scroll" class="pageagents-play-scroll">
+                <div id="pageagents-play-scale-wrap" class="pageagents-play-scale-wrap">
+                  <div id="pageagents-play-world" class="pageagents-play-world">
+                    <div class="pageagents-play-nebula" aria-hidden="true"></div>
+                    <div class="pageagents-play-stars" aria-hidden="true"></div>
+                    <div class="pageagents-play-planet-ground" aria-hidden="true"></div>
+                    <div class="pageagents-play-floor" aria-hidden="true"></div>
+                    <div class="pageagents-play-props" aria-hidden="true">
+                      <div class="pageagents-prop pageagents-prop--ring pageagents-prop--ring-a"></div>
+                      <div class="pageagents-prop pageagents-prop--ring pageagents-prop--ring-b"></div>
+                      <div class="pageagents-prop pageagents-prop--planet"></div>
+                      <div class="pageagents-prop pageagents-prop--console"></div>
+                      <div class="pageagents-prop pageagents-prop--table"></div>
+                      <div class="pageagents-prop pageagents-prop--panel"></div>
+                    </div>
+                    <div id="pageagents-play-hint" class="pageagents-play-hint">Use + below to open an agent chat column, then send from there. Scroll to pan the deck; Ctrl (or ⌘) + wheel to zoom. Load agent or New agent in Session setup starts or resumes a thread. The minimap stays docked while you pan.</div>
+                  </div>
+                </div>
+                </div>
+                <div class="pageagents-play-chrome">
+                  <div id="pageagents-play-minimap" class="pageagents-play-minimap" title="Map overview — click to jump" role="presentation">
+                    <div class="pageagents-play-minimap-inner" id="pageagents-play-minimap-inner"></div>
+                    <div class="pageagents-play-minimap-viewport" id="pageagents-play-minimap-viewport"></div>
+                  </div>
+                  <div class="pageagents-play-zoom-tools">
+                    <button type="button" class="btn btn-g btn-sm pageagents-zoom-btn" onclick="pageAgentsAdjustZoom(1/1.12)" title="Zoom out">−</button>
+                    <button type="button" class="btn btn-g btn-sm pageagents-zoom-btn" onclick="pageAgentsAdjustZoom(1.12)" title="Zoom in">+</button>
+                    <button type="button" class="btn btn-g btn-sm pageagents-zoom-btn" onclick="pageAgentsResetPlayNav()" title="Reset zoom and pan">⊙</button>
+                  </div>
+                </div>
+              </div>
+              <p id="pageagents-focus-hint" class="pageagents-focus-hint">No crew member selected — click an agent on the deck or pick a past agent. Use + in the agent chats row to open a column; the leftmost empty column can follow the focused crew member when you Send.</p>
+              <div id="pageagents-status" class="pageagents-status-box" style="display:none">
+                <div id="pageagents-status-line" style="font-size:13px;color:var(--t1);margin-bottom:8px;font-weight:500"></div>
+                <div style="height:6px;background:var(--bg3);border-radius:4px;overflow:hidden;border:1px solid var(--bdr)">
+                  <div id="pageagents-status-progress" style="height:100%;width:0%;background:linear-gradient(90deg,var(--acc),#8b84ff);border-radius:3px;transition:width 0.12s ease-out"></div>
+                </div>
+              </div>
+              <div class="pageagents-sec-hdr pageagents-sec-hdr--rowgap">Session setup</div>
+              <div class="pageagents-controls-row" aria-label="Load agent, model, name, and context">
+                <div class="fg pageagents-controls-cell pageagents-controls-cell--row1">
+                  <label class="lbl" for="pageagents-past-agent">Load agent</label>
+                  <select id="pageagents-past-agent" class="inp" onchange="void pageAgentsLoadAgentSelectChange()">
+                    <option value="">— Load agent —</option>
+                    <option value="__new__">New agent</option>
+                  </select>
+                </div>
+                <div class="fg pageagents-controls-cell pageagents-controls-cell--row1 pageagents-controls-cell--model">
+                  <label class="lbl" for="pageagents-model">Model</label>
+                  <select id="pageagents-model" class="inp" onchange="pageAgentsModelChange()">
+                    <option value="local">Local · Stub (no ML)</option>
+                    <option value="local-gpt2">Local · GPT-2 (Transformers — openai-community/gpt2)</option>
+                    <option value="local-ollama-gemma">Local · Ollama gemma4:e4b</option>
+                    <option value="distilgpt2">Hugging Face · DistilGPT-2</option>
+                    <option value="gemma2">Hugging Face · Gemma 2 2B IT</option>
+                    <option value="custom">Custom API (OpenAI-style)</option>
+                    <option value="custom-claude">Custom API (Claude / Anthropic)</option>
+                    <option value="terminal">Terminal · Open shell window</option>
+                  </select>
+                  <div class="pageagents-model-extra">
+                  <div class="fg" id="pageagents-hf-wrap" style="display:none">
+                    <label class="lbl" for="pageagents-hf-token">Hugging Face token</label>
+                    <input id="pageagents-hf-token" class="inp" type="password" autocomplete="off" placeholder="hf_…">
+                  </div>
+                  <div class="fg" id="pageagents-custom-url-wrap" style="display:none">
+                    <label class="lbl" for="pageagents-custom-url" id="pageagents-custom-url-lbl">Endpoint URL</label>
+                    <input id="pageagents-custom-url" class="inp" type="url" autocomplete="off" placeholder="https://api.openai.com/v1/chat/completions">
+                  </div>
+                  <div class="fg" id="pageagents-custom-key-wrap" style="display:none">
+                    <label class="lbl" for="pageagents-custom-key" id="pageagents-custom-key-lbl">API key</label>
+                    <input id="pageagents-custom-key" class="inp" type="password" autocomplete="off">
+                  </div>
+                  </div>
+                </div>
+                <div class="fg pageagents-controls-cell pageagents-controls-cell--row1">
+                  <label class="lbl" for="pageagents-agent-name">Agent name</label>
+                  <input id="pageagents-agent-name" class="inp" type="text" autocomplete="off" placeholder="Optional — used for the next new agent">
+                </div>
+                <div class="fg pageagents-controls-cell pageagents-controls-cell--row1 pageagents-controls-cell--context">
+                  <label class="lbl" for="pageagents-context">Context</label>
+                  <textarea id="pageagents-context" class="inp" rows="3" placeholder="Optional playground context — a snapshot is pinned to an agent chat when you Send (unless detached there)…"></textarea>
+                </div>
+              </div>
+              <div class="pageagents-sec-hdr pageagents-sec-hdr--rowgap" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span>New agent — goal, approach &amp; tasks</span>
+                <button type="button" class="btn btn-g btn-sm" id="pageagents-newagent-toggle" style="padding:2px 10px;font-size:11px;letter-spacing:.04em;text-transform:none" title="Create an agent with a goal, approach, and the tasks it works on" onclick="pageAgentsToggleNewAgentSetup()">Set up…</button>
+              </div>
+              <div id="pageagents-newagent-setup" style="display:none;border:1px solid var(--bdr);border-radius:var(--rad);padding:12px;background:var(--bg2);margin-bottom:10px">
+                <div class="fg"><label class="lbl">Goal (goal.md)</label><textarea id="pageagents-newagent-goal" class="inp" rows="2" placeholder="The agent's main goal…"></textarea></div>
+                <div class="fg"><label class="lbl">Approach (approach.md)</label><textarea id="pageagents-newagent-approach" class="inp" rows="2" placeholder="How it should approach the work…"></textarea></div>
+                <div class="fg"><label class="lbl">Tasks it works on — check any from your categories (multiple, one, or none)</label><input class="inp" id="pageagents-newagent-task-search" type="text" autocomplete="off" placeholder="Search tasks…" oninput="pageAgentsFilterTaskList('pageagents-newagent-tasks',this.value)" style="margin-bottom:6px"><div id="pageagents-newagent-tasks" class="inp" style="max-height:200px;overflow:auto;background:var(--bg3)"></div></div>
+                <div class="md-act" style="margin-top:6px;justify-content:flex-end"><button type="button" class="btn btn-p" onclick="pageAgentsCreateAgentFromSetup()">Create agent</button></div>
+              </div>
+              <div class="pageagents-sec-hdr pageagents-sec-hdr--rowgap" style="display:flex;align-items:center;justify-content:space-between;gap:8px">
+                <span>Agent chats</span>
+                <button type="button" id="pageagents-chat-manage-btn" class="btn btn-g btn-sm" style="padding:2px 10px;font-size:11px;letter-spacing:.04em;text-transform:none" title="View open agent windows; pick which to close" onclick="pageAgentsToggleManageOpenPanel()">Manage open…</button>
+              </div>
+              <div class="pageagents-chat-scroll" id="pageagents-chat-scroll" aria-label="Agent chats — scroll horizontally for more">
+                <div class="pageagents-chat-strip" id="pageagents-chat-strip">
+                  <button type="button" class="pageagents-chat-add" id="pageagents-chat-add-slot" title="Add agent chat column" aria-label="Add agent chat column">+</button>
+                </div>
+              </div>
+            </section>
+          </div>
+          <div id="pageagents-panel-wrap" class="pageagents-panel-wrap">
+            <div class="pageagents-sec-hdr pageagents-sec-hdr--muted">Logs and history</div>
+            <div id="pageagents-tabs" style="display:flex;gap:6px;flex-wrap:wrap;margin-bottom:10px;align-items:center"></div>
+            <div id="pageagents-tab-summary" class="pageagents-tab-summary-scroll pageagents-tab-summary-layout" style="display:none">
+              <div class="pageagents-zoom-host pageagents-tree-zoom-host" data-panel-zoom="1" title="Drag nodes to rearrange; drop an agent on another agent to nest · Ctrl (or ⌘) + wheel to zoom · drag background to pan">
+                <div class="pageagents-tree-toolbar">
+                  <span class="pageagents-tree-toolbar-label">Agent tree — drag to move · drop agent on agent to nest · double-click opens tab</span>
+                  <button type="button" class="btn btn-g btn-sm" onclick="pageAgentsRenderSummaryTree()">Refresh</button>
+                </div>
+                <div class="inp pageagents-summary-tree-wrap">
+                  <svg id="pageagents-summary-svg" style="width:100%;height:100%;display:block;min-height:200px;touch-action:none"></svg>
+                </div>
+              </div>
+              <div class="pageagents-zoom-host pageagents-summary-feed-host" data-panel-zoom="1" title="Ctrl (or ⌘) + wheel to zoom this panel">
+                <span class="pageagents-summary-feed-hdr">Activity and short results</span>
+                <div id="pageagents-summary-feed" class="inp pageagents-zoom-inner pageagents-summary-feed-inner"></div>
+              </div>
+            </div>
+            <div id="pageagents-tab-agent" class="pageagents-tab-agent-root pageagents-zoom-host" data-panel-zoom="1" style="display:none;flex-direction:column;gap:10px;width:100%" title="Ctrl (or ⌘) + wheel to zoom this panel">
+              <div class="pageagents-agent-split">
+                <div class="pageagents-zoom-host pageagents-agent-tree-col pageagents-tree-zoom-host" data-panel-zoom="1" title="Drag nodes to rearrange; drop an agent on another agent to nest · Ctrl (or ⌘) + wheel to zoom">
+                  <div class="pageagents-tree-toolbar">
+                    <span class="pageagents-tree-toolbar-label" id="pageagents-agent-tree-label">Agent tree — this crew member’s branch highlighted</span>
+                    <span style="display:flex;gap:8px;align-items:center">
+                      <button type="button" id="pageagents-agent-mapview-btn" class="btn btn-g btn-sm" title="Map this agent's past requests as bubbles of goals, with arrows showing how the goals relate" onclick="pageAgentsToggleAgentMapView()">Map view</button>
+                      <button type="button" class="btn btn-g btn-sm" onclick="pageAgentsRenderAgentTabTree(pageAgentsActiveTab)">Refresh</button>
+                    </span>
+                  </div>
+                  <div class="inp pageagents-summary-tree-wrap pageagents-agent-tree-wrap">
+                    <svg id="pageagents-agent-tree-svg" style="width:100%;height:100%;display:block;min-height:200px;touch-action:none"></svg>
+                  </div>
+                </div>
+                <div class="pageagents-agent-detail-col">
+                  <div class="pageagents-agent-meta" id="pageagents-agent-meta"></div>
+                  <div style="margin:0 0 6px"><button type="button" class="btn btn-g btn-sm" style="font-size:11px;padding:3px 10px;text-transform:none;letter-spacing:.03em" title="Edit this agent's goal, approach, the tasks it works on, and its collaborators" onclick="if(pageAgentsActiveTab&&pageAgentsActiveTab!=='summary')openAgentSetupModal(pageAgentsActiveTab)">Set up — goal · approach · tasks · collaborators</button></div>
+                  <div class="pageagents-agent-runs-block">
+                    <label class="lbl" for="pageagents-agent-detail-out">Runs and outputs</label>
+                    <div id="pageagents-agent-detail-out" class="inp pageagents-runs-out" tabindex="0" style="flex:1;min-height:160px;overflow:auto;background:var(--bg3);color:var(--t0);padding:10px 12px"></div>
+                  </div>
+                  <div class="pageagents-agent-collab-block">
+                    <label class="lbl" for="pageagents-agent-collab">Collaboration log</label>
+                    <div id="pageagents-agent-collab" class="inp pageagents-agent-collab-inner"></div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div id="pageinterstellar-view" style="display:none;height:100%;flex-direction:column;overflow:hidden;min-height:0;position:relative;z-index:1">
+        <div id="pageinterstellar-header" style="display:flex;justify-content:space-between;align-items:flex-start;padding:20px;border-bottom:1px solid var(--bdr);background:var(--bg1)">
+          <div style="min-width:0">
+            <h3 style="font-size:18px;font-weight:600;margin:0">Interstellar</h3>
+            <label style="display:block;font-size:13px;color:var(--t2);font-weight:normal;margin-top:8px;max-width:42rem;line-height:1.45">Free and low-cost events in the next few weeks. Live listings need the bundled server; add an optional <a href="https://developer.ticketmaster.com/products-and-docs/apis/getting-started/" target="_blank" rel="noopener noreferrer" style="color:var(--acc)">Ticketmaster Discovery</a> key, or use demo rows offline.</label>
+          </div>
+        </div>
+        <div style="flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:20px">
+          <div class="fg" style="display:flex;flex-wrap:wrap;gap:12px;align-items:flex-end">
+            <div style="flex:1;min-width:200px">
+              <label class="lbl" for="pageinterstellar-location">City or neighborhood</label>
+              <input id="pageinterstellar-location" class="inp" type="text" autocomplete="off" placeholder="e.g. Oakland, CA" style="font-size:15px">
+            </div>
+            <div style="flex:1;min-width:200px">
+              <label class="lbl" for="pageinterstellar-tm-key">Ticketmaster API key (optional)</label>
+              <input id="pageinterstellar-tm-key" class="inp" type="password" autocomplete="off" style="font-size:15px">
+            </div>
+            <button type="button" class="btn btn-g" onclick="pageInterstellarSearch()">Search</button>
+            <button type="button" class="btn btn-g" onclick="pageInterstellarUseLocation()">Use my location</button>
+          </div>
+          <p id="pageinterstellar-status" class="lbl" style="margin-top:16px;margin-bottom:8px;font-weight:500;text-transform:none;letter-spacing:0;color:var(--t3)"></p>
+          <div id="pageinterstellar-results" style="display:flex;flex-direction:column;gap:12px;padding-bottom:24px"></div>
+        </div>
+      </div>
+      <div id="pathbehind-view" style="display:none;height:100%;flex-direction:column;overflow:hidden;min-height:0;position:relative;z-index:1">
+        <div id="pathbehind-header" style="display:flex;justify-content:space-between;align-items:center;padding:20px;border-bottom:1px solid var(--bdr);background:var(--bg1)">
+          <div style="display:flex;align-items:center;gap:15px">
+            <h3 style="font-size:18px;font-weight:600;margin:0">Path Behind</h3>
+            <div style="display:flex;align-items:center;gap:10px">
+              <label style="font-size:13px;color:var(--t2)">View by day:</label>
+              <input type="date" id="pathbehind-date-selector" onchange="renderPathBehind()" style="padding:6px 12px;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rad);color:var(--t0);font-size:13px;cursor:pointer">
+              <button class="btn btn-g" onclick="pathbehindViewMode='all';renderPathBehind()" style="font-size:13px;padding:6px 12px">View All</button>
+            </div>
+          </div>
+        </div>
+        <div id="pathbehind-goal-box" style="display:none;margin:20px;padding:16px;background:var(--bg2);border:1px solid var(--bdr);border-radius:var(--rad);max-width:600px">
+          <div style="font-size:14px;font-weight:600;color:var(--t1);margin-bottom:8px">Goal for <span id="pathbehind-goal-date"></span>:</div>
+          <div id="pathbehind-goal-text" style="font-size:13px;color:var(--t2);white-space:pre-wrap"></div>
+        </div>
+        <div style="flex:1;position:relative;overflow:hidden">
+          <svg id="pathbehind-svg" style="width:100%;height:100%;position:relative;z-index:1"></svg>
+        </div>
+      </div>
+      <svg id="graph-svg"></svg>
+      <div id="s-trigger"></div>
+      <div id="s-zone"><div class="si"><input id="s-inp" placeholder="Search all nodes... (Enter)" autocomplete="off"></div></div>
+      <div id="b-trigger"></div>
+      <div id="b-zone"><div class="bi"><input id="b-inp" placeholder="Type node name, press Enter to add..." autocomplete="off"><button type="button" id="help-voice-btn" class="help-chat-btn help-voice-btn" onclick="toggleVoiceHelp()" title="Voice: click to record, transcribe and send to help chat" aria-label="Voice command"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2"/><line x1="12" y1="19" x2="12" y2="23"/><line x1="8" y1="23" x2="16" y2="23"/></svg></button><button type="button" id="help-chat-btn" class="help-chat-btn" onclick="toggleHelpChat()" title="Help through conversation" aria-label="Help through conversation"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></button></div><div class="bh">Drag a node onto another to nest it inside (spatial overlap = nesting)</div></div>
+      <div id="help-chat-box" class="help-chat-box">
+        <div class="help-chat-header"><span>Help</span><button type="button" class="help-chat-close" onclick="toggleHelpChat()" aria-label="Close">×</button></div>
+        <div class="help-chat-messages" id="help-chat-messages"></div>
+        <div class="help-chat-input-row"><textarea id="help-chat-inp" placeholder="Describe what you want to do..." rows="2" onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendHelpChatMessage()}"></textarea><button type="button" class="help-chat-send" onclick="sendHelpChatMessage()" aria-label="Send">Send</button></div>
+      </div>
+      <div id="nest-banner"><span id="nest-txt"></span></div>
+      <div id="conn-banner"><span id="conn-txt">🔗 Click two nodes</span><button onclick="exitConn()">Cancel</button></div>
+      <div id="tooltip"><b class="tt"></b><div class="tm"></div><div class="th"></div></div>
+      <div id="legend"></div>
+      <div id="stats"><span id="stn"></span><span id="ste"></span></div>
+    </div>
+  </div>
+  <!-- Right panel -->
+  <div id="rp">
+    <div id="rp-divider"></div>
+    <div class="rp-h">
+      <div class="rp-nav">
+        <button class="rp-nav-btn" id="rp-up" onclick="rpNavUp()" title="Go up level">◀</button>
+        <button class="rp-nav-btn" id="rp-down" onclick="rpNavDown()" title="Go down level">▶</button>
+      </div>
+      <h4 id="rp-title">Nodes</h4>
+    </div>
+    <div id="rp-search-container" style="padding:12px 14px;border-bottom:1px solid var(--bdr);display:block">
+      <input class="inp" id="rp-s-inp" placeholder="Search tasks..." autocomplete="off" style="width:100%;font-size:13px" onkeydown="if(event.key==='Enter'){doRightPanelSearch()}" oninput="if(this.value.trim()===''){exitSearch()}">
+    </div>
+    <div class="rp-b" id="rp-body"></div>
+    <div id="rp-todo-section" style="border-top:2px solid var(--bdr);padding:12px 14px;background:var(--bg2);flex-shrink:0;overflow-y:auto;display:none;position:absolute;left:0;right:0;z-index:100">
+      <div id="rp-todo-divider" class="resize-divider-h" style="position:absolute;top:-4px;left:0;right:0;height:8px;cursor:ns-resize;z-index:10;background:transparent"></div>
+      <div id="rp-todo-tabs" style="display:flex;align-items:center;gap:8px;margin:0 0 10px 0">
+        <h4 id="rp-todo-tab-today" onclick="setTodoActiveTab('today')" style="font-size:16px;font-weight:600;margin:0;color:var(--t0);cursor:pointer;transition:color .15s,opacity .15s" title="Today's to-do list — what you plan to do today">Today's to-do list</h4>
+        <button id="rp-todo-tab-pool-btn" type="button" onclick="setTodoActiveTab('pool')" title="Pool — tasks on your radar for sometime soon" aria-label="Open task pool" style="background:transparent;border:0;padding:0;margin:0;line-height:1;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;opacity:0.7;transition:opacity .15s,filter .15s,transform .12s"></button>
+      </div>
+      <textarea id="rp-todo-goals-input" placeholder="today's goal in a nutshell" style="width:100%;margin-bottom:10px;font-size:12px;padding:4px 10px;background:var(--bg3);border:1px solid var(--bdr);border-radius:4px;color:var(--t3);font-family:inherit;outline:none;resize:none;min-height:40px;max-height:40px;line-height:1.4;overflow:hidden" rows="2" oninput="autoSaveTodayGoals(this.value);this.style.height='auto';this.style.height=Math.min(this.scrollHeight,80)+'px'" onblur="autoSaveTodayGoals(this.value);this.style.color='var(--t3)';this.style.background='var(--bg3)'" onfocus="this.style.color='var(--t0)';this.style.background='var(--bg2)';this.style.borderColor='var(--acc)'"></textarea>
+      <div id="rp-todo-list" style="min-height:50px"></div>
+    </div>
+  </div>
+</div>
+<!-- Modals -->
+<div class="mo" id="m-node" onclick="if(event.target.id==='m-node')clMo('m-node')"><div class="md" onclick="event.stopPropagation()"><h3 id="mn-t">Add Node</h3>
+  <div class="fg"><label class="lbl">Name</label><input class="inp" id="mn-n" placeholder="Name..."></div>
+  <div class="fg"><label class="lbl">Color</label><div class="cg" id="mn-c"></div></div>
+  <div class="fg"><label class="lbl">Description</label><textarea class="inp" id="mn-d" placeholder="..." style="min-height:50px"></textarea></div>
+  <div class="fg"><label class="lbl">Status</label><select class="inp" id="mn-s"><option value="active">Active</option><option value="pending">Pending</option><option value="completed">Completed</option><option value="blocked">Blocked</option></select></div>
+  <div class="fg" id="mn-pg"><label class="lbl">Parent</label><select class="inp" id="mn-p"><option value="">— Top level —</option></select></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="mn-routine" onchange="document.getElementById('mn-routine-freq-div').style.display=this.checked?'block':'none'"> Routine Task</label></div>
+  <div class="fg" id="mn-routine-freq-div" style="display:none"><label class="lbl">Routine Frequency</label><select class="inp" id="mn-routine-freq"><option value="daily">Daily</option><option value="2-5/week">2-5/week</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option></select></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="mn-priority"> Priority</label></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="mn-buffer"> Buffer (auto-generate follow-up task)</label></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="mn-tbd" onchange="handleTBDCheckboxChange(this.checked)"> TBD (To Be Determined - schedule in calendar)</label></div>
+  <div class="fg"><label class="lbl">Type</label><select class="inp" id="mn-type" onchange="document.getElementById('mn-type-input-div').style.display=this.value==='input'?'block':'none'"><option value="task">Task</option><option value="meeting">Meeting</option><option value="event">Event</option><option value="input">Custom (input)</option></select></div>
+  <div class="fg" id="mn-type-input-div" style="display:none"><label class="lbl">Custom Type</label><input class="inp" id="mn-type-input" placeholder="Enter custom type..."></div>
+  <div class="fg" id="mn-agent-row" style="display:none;border-top:1px solid var(--bdr);padding-top:12px;margin-top:12px"><label class="lbl">Agent</label><div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap"><span id="mn-agent-status" style="font-size:13px;color:var(--t2)">No agent assigned</span><button type="button" class="btn btn-g btn-sm" id="mn-agent-btn" style="padding:4px 12px;font-size:12px" onclick="if(editId)openAssignAgentModal(editId)">Assign or create an agent</button></div></div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-node')">Cancel</button><button class="btn btn-p" id="mn-del" onclick="delFromMo()" style="display:none;background:var(--red)">Delete</button><button class="btn btn-p" id="mn-sv" onclick="saveMo()">Add</button></div>
+</div></div>
+<div class="mo" id="m-conn" onclick="if(event.target.id==='m-conn')clMo('m-conn')"><div class="md" onclick="event.stopPropagation()"><h3>Edit Connection</h3>
+  <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding:10px;background:var(--bg2);border-radius:7px">
+    <div style="text-align:center;flex:1"><div id="cc-sd" style="width:10px;height:10px;border-radius:50%;display:inline-block;margin-bottom:3px"></div><div id="cc-sn" style="font-weight:600;font-size:12px"></div></div>
+    <span style="color:var(--t3)">⟷</span>
+    <div style="text-align:center;flex:1"><div id="cc-td" style="width:10px;height:10px;border-radius:50%;display:inline-block;margin-bottom:3px"></div><div id="cc-tn" style="font-weight:600;font-size:12px"></div></div>
+  </div>
+  <div class="fg"><label class="lbl">Reason (optional)</label><input class="inp" id="cc-r" placeholder="Why?"></div>
+  <div class="fg"><label class="lbl">Thickness</label>
+    <select class="inp" id="cc-thickness" style="width:100%">
+      <option value="1">Thin (1)</option>
+      <option value="2">Medium (2)</option>
+      <option value="3">Thick (3)</option>
+    </select>
+  </div>
+  <div class="fg"><label class="lbl">Direction</label>
+    <select class="inp" id="cc-direction" style="width:100%">
+      <option value="none">No Direction</option>
+      <option value="bidirectional">Bidirectional (↔)</option>
+      <option value="a-to-b">A to B (→)</option>
+      <option value="b-to-a">B to A (←)</option>
+    </select>
+  </div>
+  <div class="fg"><label class="lbl">Color</label>
+    <select class="inp" id="cc-color" style="width:100%">
+      <option value="grey">Grey (default)</option>
+      <option value="blue">Blue</option>
+      <option value="red">Red</option>
+      <option value="green">Green</option>
+      <option value="purple">Purple</option>
+      <option value="orange">Orange</option>
+      <option value="yellow">Yellow</option>
+      <option value="pink">Pink</option>
+    </select>
+  </div>
+  <div class="fg"><label class="lbl">Line Type</label>
+    <select class="inp" id="cc-linetype" style="width:100%">
+      <option value="solid">Solid (default)</option>
+      <option value="dashed">Dashed</option>
+      <option value="dotted">Dotted</option>
+      <option value="dashdot">Dash-Dot</option>
+    </select>
+  </div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-conn')">Cancel</button><button class="btn btn-p" onclick="saveConn()">Save</button></div>
+</div></div>
+<div class="mo" id="m-ws" onclick="if(event.target.id==='m-ws')clMo('m-ws')"><div class="md" onclick="event.stopPropagation()"><h3>New Workspace</h3>
+  <div class="fg"><label class="lbl">Name</label><input class="inp" id="ws-n" placeholder="e.g. Work Projects..."></div>
+  <div class="fg"><label class="lbl">Icon</label><input class="inp" id="ws-i" placeholder="💼" style="width:50px;text-align:center"></div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-ws')">Cancel</button><button class="btn btn-p" onclick="saveWS()">Create</button></div>
+</div></div>
+<div class="mo" id="m-cal-event" onclick="if(event.target.id==='m-cal-event')clMo('m-cal-event')"><div class="md" onclick="event.stopPropagation()"><h3 id="cal-ev-t">Add Calendar Event</h3>
+  <div class="fg"><label class="lbl">Title <span style="color:var(--red)">*</span></label><input class="inp" id="cal-ev-title" placeholder="Event title..." required></div>
+  <div class="fg"><label class="lbl">Category</label><select class="inp" id="cal-ev-cat"><option value="">— Select category —</option></select></div>
+  <div class="fg"><label class="lbl">Start Time</label><input type="datetime-local" class="inp" id="cal-ev-start"></div>
+  <div class="fg"><label class="lbl">End Time</label><input type="datetime-local" class="inp" id="cal-ev-end"></div>
+  <div class="fg"><label class="lbl">Location</label><input class="inp" id="cal-ev-loc" placeholder="Location (optional)"></div>
+  <div class="fg"><label class="lbl">Link</label><input class="inp" id="cal-ev-link" placeholder="URL (optional)" type="url"></div>
+  <div class="fg"><label class="lbl">Repeat</label><select class="inp" id="cal-ev-repeat" onchange="if(['weekly','biweekly','monthly'].includes(this.value)&&document.getElementById('cal-ev-routine').checked){document.getElementById('cal-ev-routine-freq').value=this.value;}"><option value="none">None</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option></select></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cal-ev-routine" onchange="document.getElementById('cal-ev-routine-freq-div').style.display=this.checked?'block':'none'"> Routine Task</label></div>
+  <div class="fg" id="cal-ev-routine-freq-div" style="display:none"><label class="lbl">Routine Frequency</label><select class="inp" id="cal-ev-routine-freq" onchange="if(['weekly','biweekly','monthly'].includes(this.value)){document.getElementById('cal-ev-repeat').value=this.value;}"><option value="daily">Daily</option><option value="2-5/week">2-5/week</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option></select></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cal-ev-priority"> Priority</label></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cal-ev-buffer"> Buffer (auto-generate follow-up task)</label></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cal-ev-tbd" onchange="handleCalendarTBDCheckboxChange(this.checked)"> TBD (To Be Determined - float in header)</label></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="cal-ev-nah"> NAH (pale / low priority — still on calendar)</label></div>
+  <div class="fg"><label class="lbl">Type</label><select class="inp" id="cal-ev-type" onchange="document.getElementById('cal-ev-type-input-div').style.display=this.value==='input'?'block':'none'"><option value="task">Task</option><option value="meeting">Meeting</option><option value="event">Event</option><option value="input">Custom (input)</option></select></div>
+  <div class="fg" id="cal-ev-type-input-div" style="display:none"><label class="lbl">Custom Type</label><input class="inp" id="cal-ev-type-input" placeholder="Enter custom type..."></div>
+  <div class="fg"><label class="lbl">Notes</label><textarea class="inp" id="cal-ev-notes" placeholder="Event notes (optional)" style="min-height:60px"></textarea></div>
+  <div class="fg"><label class="lbl">Post-event Notes</label><textarea class="inp" id="cal-ev-post-notes" placeholder="Post-event notes (linked to task notes)" style="min-height:60px"></textarea></div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-cal-event')">Cancel</button><button class="btn btn-p" id="cal-ev-save-btn" onclick="saveCalendarEvent()">Add Event</button></div>
+</div></div>
+<div class="mo" id="m-assign-agent" onclick="if(event.target.id==='m-assign-agent')clMo('m-assign-agent')"><div class="md" onclick="event.stopPropagation()"><h3 id="assign-agent-t">Assign an agent</h3>
+  <div class="fg"><label class="lbl">Task</label><div class="inp" id="assign-agent-task" style="background:var(--bg3);color:var(--t1);min-height:auto"></div></div>
+  <div class="fg"><label class="lbl">Agent</label><select class="inp" id="assign-agent-select" onchange="onAssignAgentSelectChange()">
+      <option value="">— None (no agent) —</option>
+      <option value="__new__">＋ Create a new agent for this task</option>
+    </select></div>
+  <div class="fg" id="assign-agent-new-name-fg" style="display:none"><label class="lbl">New agent name</label><input class="inp" id="assign-agent-new-name" placeholder="Optional — auto-named if blank"></div>
+  <div class="fg"><label class="lbl">Goal (goal.md)</label><textarea class="inp" id="assign-agent-goal" placeholder="The agent's main goal for this task…" style="min-height:70px"></textarea></div>
+  <div class="fg"><label class="lbl">Approach (approach.md)</label><textarea class="inp" id="assign-agent-approach" placeholder="How the agent should approach the work…" style="min-height:70px"></textarea></div>
+  <div class="fg" id="assign-agent-open-fg" style="display:none"><button type="button" class="btn btn-g btn-sm" onclick="assignAgentOpenInAgentsPage()">Open this agent in the Agents page →</button></div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-assign-agent')">Cancel</button><button class="btn btn-g" id="assign-agent-unassign-btn" style="display:none" onclick="unassignNodeAgent()">Unassign</button><button class="btn btn-p" id="assign-agent-save-btn" onclick="saveAssignAgent()">Assign</button></div>
+</div></div>
+<div class="mo" id="m-agent-setup" onclick="if(event.target.id==='m-agent-setup')clMo('m-agent-setup')"><div class="md" onclick="event.stopPropagation()"><h3 id="agent-setup-t">Agent setup</h3>
+  <div class="fg"><label class="lbl">Goal (goal.md)</label><textarea class="inp" id="agent-setup-goal" placeholder="The agent's main goal…" style="min-height:70px"></textarea></div>
+  <div class="fg"><label class="lbl">Approach (approach.md)</label><textarea class="inp" id="agent-setup-approach" placeholder="How it should approach the work…" style="min-height:70px"></textarea></div>
+  <div class="fg"><label class="lbl">Tasks it works on</label><input class="inp" id="agent-setup-task-search" type="text" autocomplete="off" placeholder="Search tasks…" oninput="pageAgentsFilterTaskList('agent-setup-task-list',this.value)" style="margin-bottom:6px"><div class="inp" id="agent-setup-task-list" style="max-height:200px;overflow:auto;background:var(--bg3)"></div></div>
+  <div class="fg"><label class="lbl">Collaborators</label>
+    <div style="font-size:11px;color:var(--t2);line-height:1.45;margin-bottom:6px;text-transform:none;letter-spacing:0">Other agents this one may draw on. <b>Read-only</b> — it reads their goal, approach and recent work to inform its own, but never writes to their space. A collaborator only contributes while it is itself working on tasks.</div>
+    <div class="inp" id="agent-setup-collab-list" style="max-height:220px;overflow:auto;background:var(--bg3)"></div></div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-agent-setup')">Cancel</button><button class="btn btn-p" onclick="saveAgentSetup()">Save</button></div>
+</div></div>
+<div class="mo" id="m-note-edit" onclick="if(event.target.id==='m-note-edit')clMo('m-note-edit')"><div class="md" onclick="event.stopPropagation()"><h3 id="note-edit-t">Edit Note</h3>
+  <div class="fg"><label class="lbl">Title <span style="color:var(--red)">*</span></label><input class="inp" id="note-edit-title" placeholder="Note title..." required></div>
+  <div class="fg"><label class="lbl">Category</label><select class="inp" id="note-edit-cat"><option value="">— Select category —</option></select></div>
+  <div class="fg"><label class="lbl">Color</label><div class="cg" id="note-edit-c"></div></div>
+  <div class="fg"><label class="lbl">Description</label><textarea class="inp" id="note-edit-desc" placeholder="Description (optional)" style="min-height:60px"></textarea></div>
+  <div class="fg" style="border-top:1px solid var(--bdr);padding-top:12px;margin-top:12px"><label class="lbl" style="color:var(--t2);font-size:11px">Task Properties</label></div>
+  <div class="fg"><label class="lbl">Type</label><select class="inp" id="note-edit-type" onchange="document.getElementById('note-edit-type-input-div').style.display=this.value==='input'?'block':'none'"><option value="">— Not a task —</option><option value="task">Task</option><option value="meeting">Meeting</option><option value="event">Event</option><option value="input">Custom (input)</option></select></div>
+  <div class="fg" id="note-edit-type-input-div" style="display:none"><label class="lbl">Custom Type</label><input class="inp" id="note-edit-type-input" placeholder="Enter custom type..."></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="note-edit-routine" onchange="document.getElementById('note-edit-routine-freq-div').style.display=this.checked?'block':'none'"> Routine Task</label></div>
+  <div class="fg" id="note-edit-routine-freq-div" style="display:none"><label class="lbl">Routine Frequency</label><select class="inp" id="note-edit-routine-freq"><option value="daily">Daily</option><option value="2-5/week">2-5/week</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option></select></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="note-edit-priority"> Priority</label></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="note-edit-buffer"> Buffer (auto-generate follow-up task)</label></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="note-edit-tbd"> TBD (To Be Determined - schedule in calendar)</label></div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-note-edit')">Cancel</button><button class="btn btn-p" id="note-edit-save-btn" onclick="saveNoteEdit()">Save</button></div>
+</div></div>
+<div class="mo" id="m-note-new" onclick="if(event.target.id==='m-note-new')clMo('m-note-new')"><div class="md" onclick="event.stopPropagation()"><h3>New Note</h3>
+  <div class="fg"><label class="lbl">Title <span style="color:var(--red)">*</span></label><input class="inp" id="note-new-title" placeholder="Note title..." required></div>
+  <div class="fg"><label class="lbl">Category</label><select class="inp" id="note-new-cat"><option value="">— Select category —</option></select></div>
+  <div class="fg"><label class="lbl">Color</label><div class="cg" id="note-new-c"></div></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="note-new-standalone" onchange="syncNoteNewStandaloneUI()"> Standalone note (only in Notes — not on Home, calendar, or task lists)</label></div>
+  <div class="fg" style="border-top:1px solid var(--bdr);padding-top:12px;margin-top:12px"><label class="lbl" style="color:var(--t2);font-size:11px">Task Properties (optional - set to create as task)</label></div>
+  <div class="fg"><label class="lbl">Type</label><select class="inp" id="note-new-type" onchange="document.getElementById('note-new-type-input-div').style.display=this.value==='input'?'block':'none'"><option value="">— Not a task —</option><option value="task">Task</option><option value="meeting">Meeting</option><option value="event">Event</option><option value="input">Custom (input)</option></select></div>
+  <div class="fg" id="note-new-type-input-div" style="display:none"><label class="lbl">Custom Type</label><input class="inp" id="note-new-type-input" placeholder="Enter custom type..."></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="note-new-routine" onchange="document.getElementById('note-new-routine-freq-div').style.display=this.checked?'block':'none'"> Routine Task</label></div>
+  <div class="fg" id="note-new-routine-freq-div" style="display:none"><label class="lbl">Routine Frequency</label><select class="inp" id="note-new-routine-freq"><option value="daily">Daily</option><option value="2-5/week">2-5/week</option><option value="weekly">Weekly</option><option value="biweekly">Biweekly</option><option value="monthly">Monthly</option></select></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="note-new-priority"> Priority</label></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="note-new-buffer"> Buffer (auto-generate follow-up task)</label></div>
+  <div class="fg"><label class="lbl" style="display:flex;align-items:center;gap:8px"><input type="checkbox" id="note-new-tbd" onchange="handleTBDCheckboxChange(this.checked)"> TBD (To Be Determined - schedule in calendar)</label></div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-note-new')">Cancel</button><button class="btn btn-p" id="note-new-create-btn" onclick="saveNewNote()">Create</button></div>
+</div></div>
+<div class="mo" id="m-note-delete-confirm" onclick="if(event.target.id==='m-note-delete-confirm')clMo('m-note-delete-confirm')"><div class="md" onclick="event.stopPropagation()"><h3>Delete Note</h3>
+  <div class="fg"><p style="color:var(--t1);margin:0;line-height:1.5">Delete this note? The task will remain, but the note content will be removed.</p></div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-note-delete-confirm')">Cancel</button><button class="btn btn-p" id="note-delete-confirm-btn" onclick="confirmDeleteNote()" style="background:var(--red)">Delete</button></div>
+</div></div>
+<div class="mo" id="m-notes-figure-crop" onclick="if(event.target.id==='m-notes-figure-crop')clMo('m-notes-figure-crop')"><div class="md" onclick="event.stopPropagation()" style="max-width:90vw;max-height:90vh"><h3>Crop Image</h3>
+  <p style="font-size:13px;color:var(--t2);margin:0 0 10px 0">Drag edges or corners to adjust the crop, or drag on the dark area for a new rectangle. Click Apply to crop.</p>
+  <div style="position:relative;overflow:auto;max-height:60vh;background:var(--bg3);border-radius:8px;border:1px solid var(--bdr)">
+    <canvas id="notes-figure-crop-canvas" style="display:block;touch-action:none"></canvas>
+  </div>
+  <div class="md-act" style="margin-top:12px"><button class="btn btn-g" onclick="clMo('m-notes-figure-crop')">Cancel</button><button class="btn btn-p" id="notes-figure-crop-apply" onclick="applyNotesFigureCrop()">Apply Crop</button></div>
+</div></div>
+<div class="mo" id="m-findtime-range" onclick="if(event.target.id==='m-findtime-range')clMo('m-findtime-range')"><div class="md" onclick="event.stopPropagation()" style="max-width:400px"><h3>Change Time Range</h3>
+  <div class="fg"><label class="lbl">Start Date & Time</label><input type="datetime-local" class="inp" id="findtime-start"></div>
+  <div class="fg"><label class="lbl">End Date & Time</label><input type="datetime-local" class="inp" id="findtime-end"></div>
+  <div class="md-act"><button class="btn btn-g" onclick="clMo('m-findtime-range')">Cancel</button><button class="btn btn-p" onclick="saveFindTimeRange()">Apply</button></div>
+</div></div>
+<div class="mo" id="m-routine-action" onclick="if(event.target.id==='m-routine-action')clMo('m-routine-action')"><div class="md" onclick="event.stopPropagation()" style="max-width:400px"><h3 id="routine-action-title">Routine Event Action</h3>
+  <p id="routine-action-message" style="color:var(--t2);margin:10px 0 20px 0;font-size:14px"></p>
+  <div class="md-act" style="flex-direction:column;gap:10px">
+    <button class="btn btn-p" onclick="handleRoutineAction('all')" style="width:100%">All Future Events</button>
+    <button class="btn btn-p" onclick="handleRoutineAction('this')" style="width:100%">Only This Event</button>
+    <button class="btn btn-g" onclick="clMo('m-routine-action')" style="width:100%">Cancel</button>
+  </div>
+</div></div>
+<div class="mo" id="m-pdf-export" onclick="if(event.target.id==='m-pdf-export')closePdfExportModal()"><div class="md" onclick="event.stopPropagation()" style="max-width:720px;width:95vw">
+  <h3>Export Note to PDF</h3>
+  <p style="font-size:13px;color:var(--t2);margin:0 0 14px 0">Adjust the page width to control what content is included. Onset = left margin, Offset = right margin.</p>
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;margin-bottom:14px">
+    <div class="fg">
+      <label class="lbl">Onset (left margin) <span id="pdf-onset-val" style="color:var(--t3);font-weight:500">0px</span></label>
+      <input type="range" class="inp" id="pdf-onset" min="0" max="400" value="0" style="width:100%;padding:0" oninput="schedulePdfExportPreview()">
+    </div>
+    <div class="fg">
+      <label class="lbl">Offset (right margin) <span id="pdf-offset-val" style="color:var(--t3);font-weight:500">0px</span></label>
+      <input type="range" class="inp" id="pdf-offset" min="0" max="400" value="0" style="width:100%;padding:0" oninput="schedulePdfExportPreview()">
+    </div>
+  </div>
+  <div style="margin-bottom:14px">
+    <label class="lbl" style="display:block;margin-bottom:6px">Preview</label>
+    <div id="pdf-preview-container" style="border:1px solid var(--bdr);border-radius:8px;overflow:auto;max-height:400px;background:var(--bg2);display:flex;align-items:flex-start;justify-content:center;padding:12px">
+      <img id="pdf-preview-img" alt="PDF preview" style="max-width:100%;height:auto;box-shadow:0 2px 12px rgba(0,0,0,.2)">
+    </div>
+    <div id="pdf-preview-loading" style="display:none;padding:40px;text-align:center;color:var(--t3);font-size:13px">Generating preview...</div>
+  </div>
+  <div class="md-act"><button class="btn btn-g" onclick="closePdfExportModal()">Cancel</button><button class="btn btn-p" onclick="confirmPdfExport()">Export PDF</button></div>
+</div></div>
+<div id="ctx">
+  <div class="cx" onclick="cxA('enter')">📂 Enter</div>
+  <div class="cx" onclick="cxA('rename')">✏️ Rename</div>
+  <div class="cx" onclick="cxA('edit')">⚙️ Edit</div>
+  <div class="cx" onclick="cxA('agent')">🤖 Agent</div>
+  <div class="cx" onclick="cxA('add')">➕ Add inside</div>
+  <div class="cx" onclick="cxA('conn')">🔗 Connect</div>
+  <div class="cxs"></div>
+  <div class="cx dng" onclick="cxA('del')">🗑️ Delete</div>
+</div>
+<!-- Timer modal -->
+<div class="timer-modal" id="timer-modal" onclick="if(event.target.id==='timer-modal')clTimer()">
+  <div class="timer-popup" onclick="event.stopPropagation()">
+    <h3 style="margin-bottom:14px;font-size:16px">Set Timer</h3>
+    <div class="timer-options">
+      <div class="timer-opt" tabindex="0" onclick="setTimer(5)" onkeydown="if(event.key==='Enter')setTimer(5)">5 min</div>
+      <div class="timer-opt" tabindex="0" onclick="setTimer(10)" onkeydown="if(event.key==='Enter')setTimer(10)">10 min</div>
+      <div class="timer-opt" tabindex="0" onclick="setTimer(15)" onkeydown="if(event.key==='Enter')setTimer(15)">15 min</div>
+      <div class="timer-opt" tabindex="0" onclick="setTimer(30)" onkeydown="if(event.key==='Enter')setTimer(30)">30 min</div>
+      <div class="timer-opt" tabindex="0" onclick="setTimer(60)" onkeydown="if(event.key==='Enter')setTimer(60)">60 min</div>
+      <div class="timer-opt" tabindex="0" onclick="setTimer(90)" onkeydown="if(event.key==='Enter')setTimer(90)">90 min</div>
+    </div>
+    <div class="timer-custom">
+      <input type="number" id="timer-custom-inp" placeholder="Custom minutes (float)" step="0.1" min="0.1">
+      <button class="btn btn-p timer-btn-set" onclick="setTimerCustom()">Set</button>
+    </div>
+    <div class="timer-actions">
+      <button class="btn btn-g" onclick="clTimer()">Cancel</button>
+    </div>
+  </div>
+</div>
+<!-- Timer alert (ringing) -->
+<div class="timer-alert" id="timer-alert" onclick="if(event.target.id==='timer-alert')document.getElementById('timer-alert').classList.remove('open')">
+  <div class="timer-alert-box" onclick="event.stopPropagation()">
+    <h3>⏰ Timer Finished!</h3>
+    <p id="timer-alert-node"></p>
+    <div class="timer-alert-actions">
+      <button class="btn btn-p" onclick="timerComplete()">✓ Complete Task</button>
+      <button class="btn btn-g" onclick="timerRestart()">⏱️ Start Another</button>
+      <button class="btn btn-g" onclick="timerAddTasks()">➕ Add Tasks</button>
+    </div>
+  </div>
+</div>
+<div id="save-flash">✓ Saved</div>
+
+<script src="js/app.js?v=1772851807"></script>
+</body>
+</html>

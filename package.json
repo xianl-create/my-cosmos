@@ -1,0 +1,13 @@
+{
+  "name": "my-cosmos",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Local-first SPA. The bundled server (scripts/server.js) is dependency-free except for the in-app interactive terminal column, which needs node-pty (PTY) and ws (WebSocket) — both optional so hosted deployments can skip native builds.",
+  "scripts": {
+    "start": "node scripts/server.js"
+  },
+  "optionalDependencies": {
+    "node-pty": "^1.0.0",
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,22 @@
+# Real user data — never committed to the (public) code repo.
+# The hosted deployment stores user data in a separate PRIVATE repo via
+# MY_COSMOS_GH_REPO/MY_COSMOS_GH_TOKEN (see DEPLOY.md).
+# Only the shipped new-account template ships with the code.
+data/*
+!data/template-user_data.json
+
+# Server runtime artifacts
+.server.log
+.server.pid
+
+# Dependencies (optional — only the local in-app terminal needs them)
+node_modules/
+
+# Local machine noise
+.DS_Store
+.claude/settings.local.json
+.claude/scheduled_tasks.lock
+scripts/__pycache__/
+
+# Internal planning docs
+developer/

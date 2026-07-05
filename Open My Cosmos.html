@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Open My Cosmos</title>
+<style>
+  body{font-family:system-ui,-apple-system,sans-serif;background:#0f1117;color:#e8eaed;margin:0;min-height:100vh;display:flex;align-items:center;justify-content:center;padding:24px;}
+  .box{max-width:520px;background:#1a1f2e;border:1px solid #2d3548;border-radius:12px;padding:28px 32px;box-shadow:0 20px 50px rgba(0,0,0,.35);}
+  h1{font-size:1.35rem;margin:0 0 8px;font-weight:600;}
+  p{color:#9aa3b2;font-size:14px;line-height:1.55;margin:0 0 16px;}
+  .status{font-size:13px;margin:16px 0;padding:10px 12px;border-radius:8px;background:#12151f;border:1px solid #2d3548;color:#c4b5fd;}
+  .ok{border-color:#166534;background:#0f1f14;color:#86efac;}
+  .bad{border-color:#7f1d1d;background:#1f0f0f;color:#fca5a5;}
+  a.open{display:inline-block;margin-top:8px;padding:12px 22px;border-radius:10px;background:#6c63ff;color:#fff;font-weight:600;text-decoration:none;font-size:15px;}
+  a.open:hover{filter:brightness(1.06);}
+  code{font-size:12px;background:#12151f;padding:2px 6px;border-radius:4px;}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>My Cosmos</h1>
+  <p>User data is stored as separate JSON files under <code>data/</code> in this project. The app runs in your browser at <code>http://localhost:3000</code> after the small local server is running.</p>
+  <p style="margin-bottom:10px"><strong>1.</strong> Double-click <strong>start.command</strong> in this folder (macOS opens Terminal and starts Node). Wait until Terminal shows the server URL.</p>
+  <p style="margin-bottom:18px"><strong>2.</strong> Open the app:</p>
+  <p><a class="open" href="http://localhost:3000/">Open My Cosmos</a></p>
+  <div id="st" class="status" role="status">Checking whether the server responds…</div>
+</div>
+<script>
+(function(){
+  var st=document.getElementById('st');
+  var urls=['http://127.0.0.1:3000/api/health','http://localhost:3000/api/health'];
+  function check(i){
+    i=i||0;
+    if(i>=urls.length){
+      st.className='status bad';
+      st.textContent='Could not reach the server from this page. That is normal if Node is not running yet — use step 1, then click “Open My Cosmos” again.';
+      return;
+    }
+    fetch(urls[i],{method:'GET',mode:'cors',cache:'no-store'})
+      .then(function(r){
+        if(r.ok){
+          st.className='status ok';
+          st.textContent='Server is up. Use the purple button above to open the app.';
+        }else{
+          st.className='status bad';
+          st.textContent='Something is listening but /api/health did not return OK. Check the Terminal window from start.command.';
+        }
+      })
+      .catch(function(){ check(i+1); });
+  }
+  check(0);
+})();
+</script>
+</body>
+</html>

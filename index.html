@@ -65,12 +65,18 @@
     <div class="lrow"><div class="lrow-inp-wrap"><input class="inp" id="lg-name" placeholder="Enter your name..." autofocus><button type="button" class="lg-dice" id="lg-dice" onclick="rollLoginName()" title="Random name" aria-label="Random name"><svg class="lg-dice-svg" viewBox="0 0 48 48" aria-hidden="true" xmlns="http://www.w3.org/2000/svg"><defs><linearGradient id="lgDiceFace" x1="4" y1="4" x2="40" y2="44" gradientUnits="userSpaceOnUse"><stop stop-color="#fef08a"/><stop offset="0.25" stop-color="#facc15"/><stop offset="0.55" stop-color="#fb923c"/><stop offset="0.8" stop-color="#f472b6"/><stop offset="1" stop-color="#c084fc"/></linearGradient><filter id="lgDiceSh" x="-20%" y="-20%" width="140%" height="140%"><feDropShadow dx="0" dy="2" stdDeviation="1.5" flood-color="#0f172a" flood-opacity="0.4"/></filter></defs><ellipse cx="24" cy="42" rx="15" ry="3.2" fill="#0f172a" opacity="0.18"/><g filter="url(#lgDiceSh)"><rect x="10" y="10" width="32" height="32" rx="8.5" fill="#7c3aed"/><rect x="6" y="6" width="32" height="32" rx="9" fill="url(#lgDiceFace)" stroke="#3730a3" stroke-width="2.4"/><path d="M10 14 Q24 10 38 14" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" opacity="0.45"/></g><circle cx="17" cy="19" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/><circle cx="31" cy="19" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/><circle cx="24" cy="26.5" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/><circle cx="17" cy="34" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/><circle cx="31" cy="34" r="3.5" fill="#fffef5" stroke="#1e1b4b" stroke-width="1.35"/></svg></button></div><button class="btn btn-p" onclick="doLogin()">Go →</button></div>
     <!-- Public hosted mode only (MY_COSMOS_PUBLIC=1): account + password. Hidden locally. -->
     <div id="lg-public-auth" style="display:none;margin-top:12px">
+      <div id="lg-register-fields" style="display:none">
+        <input class="inp" id="lg-first" type="text" placeholder="First name..." autocomplete="given-name" style="width:100%;margin-bottom:10px">
+        <input class="inp" id="lg-last" type="text" placeholder="Last name..." autocomplete="family-name" style="width:100%;margin-bottom:10px">
+        <input class="inp" id="lg-email" type="email" placeholder="Email address..." autocomplete="email" style="width:100%;margin-bottom:10px">
+      </div>
       <input class="inp" id="lg-pass" type="password" placeholder="Password (8+ characters)..." autocomplete="current-password" style="width:100%;margin-bottom:10px">
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-p" id="lg-signin-btn" onclick="publicAuthSubmit('login')">Sign in</button>
         <button class="btn btn-g" id="lg-register-btn" onclick="publicAuthSubmit('register')">Create account</button>
       </div>
       <div id="lg-auth-msg" style="display:none;margin-top:10px;font-size:12px;line-height:1.4;color:#e05c5c"></div>
+      <button class="btn btn-g" id="lg-resend-btn" onclick="publicAuthResend()" style="display:none;margin-top:10px;font-size:12px;padding:6px 12px">Resend verification email</button>
     </div>
     <div class="ux" id="ux" style="display:none"><h3>Or continue as:</h3><div id="ul"></div></div>
     <div id="lg-tools-row" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--bdr);display:flex;gap:8px;justify-content:center;flex-wrap:wrap">

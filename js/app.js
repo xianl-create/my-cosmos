@@ -36368,27 +36368,87 @@ async function publicAuthLogout(){
   publicAuthClearToken();
   publicModeAdjustLoginScreen();
 }
+/* Toggle the register-only fields (first/last/email). Returns whether they're now shown. */
+function publicAuthShowRegisterFields(show){
+  const box=document.getElementById('lg-register-fields');
+  if(box)box.style.display=show?'':'none';
+  window.__MC_REGISTER_MODE__=!!show;
+  return !!show;
+}
+function publicAuthShowResend(show){
+  const btn=document.getElementById('lg-resend-btn');
+  if(btn)btn.style.display=show?'':'none';
+}
 async function publicAuthSubmit(mode){
   const nameInp=document.getElementById('lg-name');
   const passInp=document.getElementById('lg-pass');
+  publicAuthShowResend(false);
+  if(mode==='login')publicAuthShowRegisterFields(false);
+  const needProfile=mode==='register'&&window.__EMAIL_VERIFY__;
+  // When verification is on, the first "Create account" click reveals the extra fields;
+  // the second one submits. When it's off, register works as before (username + password).
+  if(needProfile&&!window.__MC_REGISTER_MODE__){
+    publicAuthShowRegisterFields(true);
+    publicAuthMsg('Fill in your details, then tap “Create account” again.',false);
+    const f=document.getElementById('lg-first');if(f)f.focus();
+    return;
+  }
   const username=((nameInp&&nameInp.value.trim())||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,50);
   const password=passInp?passInp.value:'';
   if(!username){publicAuthMsg('Enter a username.',true);if(nameInp)nameInp.focus();return;}
+  const payload={username,password};
+  if(needProfile){
+    const firstName=(document.getElementById('lg-first')||{}).value||'';
+    const lastName=(document.getElementById('lg-last')||{}).value||'';
+    const email=((document.getElementById('lg-email')||{}).value||'').trim();
+    if(!firstName.trim()){publicAuthMsg('Enter your first name.',true);return;}
+    if(!lastName.trim()){publicAuthMsg('Enter your last name.',true);return;}
+    if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){publicAuthMsg('Enter a valid email address.',true);return;}
+    payload.firstName=firstName.trim();payload.lastName=lastName.trim();payload.email=email;
+  }
   if(!password){publicAuthMsg('Enter your password.',true);if(passInp)passInp.focus();return;}
   publicAuthMsg(mode==='register'?'Creating account…':'Signing in…',false);
   try{
     const r=await fetch('/api/auth/'+(mode==='register'?'register':'login'),{
       method:'POST',headers:{'Content-Type':'application/json'},
-      body:JSON.stringify({username,password})
+      body:JSON.stringify(payload)
     });
     const j=await r.json();
-    if(!j||!j.ok){publicAuthMsg((j&&j.error)||'Sign-in failed.',true);return;}
+    if(!j||!j.ok){
+      publicAuthMsg((j&&j.error)||'Sign-in failed.',true);
+      if(j&&j.needVerify)publicAuthShowResend(true); // let them re-send the link
+      return;
+    }
+    // Registration that requires email verification: no session yet — prompt to check inbox.
+    if(j.pendingVerification){
+      publicAuthShowRegisterFields(false);
+      if(passInp)passInp.value='';
+      const where=j.email?(' at '+j.email):'';
+      publicAuthMsg(j.emailSent===false
+        ? ('Account created, but the verification email failed to send. Use “Resend” below.')
+        : ('Check your email'+where+' to verify your account, then sign in.'),false);
+      publicAuthShowResend(true);
+      return;
+    }
     window.__AUTH_TOKEN__=j.token||'';
     try{localStorage.setItem('MyCosmos_authToken',window.__AUTH_TOKEN__);}catch(_){}
     publicAuthMsg('',false);
     if(passInp)passInp.value='';
     await loginAs(j.username,j.username);
   }catch(e){
+    publicAuthMsg('Could not reach the server — try again.',true);
+  }
+}
+/* Ask the server to re-send the verification email for the entered username. */
+async function publicAuthResend(){
+  const nameInp=document.getElementById('lg-name');
+  const username=((nameInp&&nameInp.value.trim())||'').toLowerCase().replace(/[^a-z0-9_-]/g,'').slice(0,50);
+  if(!username){publicAuthMsg('Enter your username first, then resend.',true);if(nameInp)nameInp.focus();return;}
+  publicAuthMsg('Sending verification email…',false);
+  try{
+    await fetch('/api/auth/resend',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({username})});
+    publicAuthMsg('If that account needs verifying, a fresh link is on its way. Check your inbox.',false);
+  }catch(_){
     publicAuthMsg('Could not reach the server — try again.',true);
   }
 }
@@ -36403,7 +36463,14 @@ function publicModeAdjustLoginScreen(){
   if(pass&&!pass.__mcEnterWired){
     pass.__mcEnterWired=true;
     pass.addEventListener('keydown',e=>{
-      if(e.key==='Enter'){e.preventDefault();e.stopPropagation();publicAuthSubmit('login');}
+      if(e.key==='Enter'){e.preventDefault();e.stopPropagation();publicAuthSubmit(window.__MC_REGISTER_MODE__?'register':'login');}
+    });
+  }
+  const email=document.getElementById('lg-email');
+  if(email&&!email.__mcEnterWired){
+    email.__mcEnterWired=true;
+    email.addEventListener('keydown',e=>{
+      if(e.key==='Enter'){e.preventDefault();e.stopPropagation();publicAuthSubmit('register');}
     });
   }
 }
@@ -36458,6 +36525,7 @@ async function publicModeDetect(){
     const j=await r.json();
     if(!j||j.publicMode!==true)return;
     window.__PUBLIC_MODE__=true;
+    window.__EMAIL_VERIFY__=j.emailVerify===true;
     publicModeAdjustLoginScreen();
     applyPublicModeTabs();
     if(window.__AUTH_TOKEN__){

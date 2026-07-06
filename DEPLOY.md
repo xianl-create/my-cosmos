@@ -5,7 +5,7 @@ The app runs in two modes from the same codebase:
 | | Local (developer machine) | Public (hosted) |
 |---|---|---|
 | Trigger | default | `MY_COSMOS_PUBLIC=1` |
-| Login | username only, no password | register + password, session token on every API call |
+| Login | username only, no password | register (name + email + password, email-verified) + session token on every API call |
 | Left rail | all tabs | Home / Calendar / Notes / Agents / Settings only |
 | Page drag-rearrange | on | off |
 | `data/` over HTTP | served (file:// support) | blocked (except the account template) |
@@ -71,11 +71,32 @@ gh repo create yourname/my-cosmos --public --source . --push
   MY_COSMOS_PUBLIC=1 MY_COSMOS_PORT=3456 MY_COSMOS_DATA=/tmp/pubtest node scripts/server.js
   ```
 
+## Email verification (Resend)
+
+In public mode, if `MY_COSMOS_RESEND_KEY` is set, registration collects **first name,
+last name, and email**, and a new account **cannot sign in until the email is confirmed**.
+On register the server emails a one-time verification link (valid 24 h); clicking it flips
+the account to verified. A "Resend verification email" button covers lost/expired links.
+Names, email, and the `verified` flag live in `auth.json` (synced to the private data repo
+like everything else). If `MY_COSMOS_RESEND_KEY` is unset, accounts are auto-verified — so
+local/dev mode is completely unchanged.
+
+1. Create a free account at [resend.com] and make an **API key**.
+2. In the Render dashboard set `MY_COSMOS_RESEND_KEY`. The default sender
+   `onboarding@resend.dev` works immediately for testing; for production set
+   `MY_COSMOS_MAIL_FROM` to an address on a domain you've verified in Resend.
+3. Verification links use `RENDER_EXTERNAL_URL` automatically. Only set
+   `MY_COSMOS_PUBLIC_URL` to override (e.g. a custom domain).
+
 ## Env var reference (additions)
 
 | Var | Meaning |
 |---|---|
 | `MY_COSMOS_PUBLIC=1` | enable public mode (auth enforced, lockdowns active) |
+| `MY_COSMOS_MAX_ACCOUNTS` | max registrations allowed (default `50`; existing users can always sign in) |
 | `MY_COSMOS_GH_REPO` | `owner/repo` of the private data repo (unset = sync off) |
 | `MY_COSMOS_GH_TOKEN` | fine-grained PAT with Contents read/write on that repo |
 | `MY_COSMOS_GH_BRANCH` | branch to sync (default `main`) |
+| `MY_COSMOS_RESEND_KEY` | Resend API key — enables email verification (unset = auto-verify) |
+| `MY_COSMOS_MAIL_FROM` | verification sender (default `My Cosmos <onboarding@resend.dev>`) |
+| `MY_COSMOS_PUBLIC_URL` | base URL for verify links (default: `RENDER_EXTERNAL_URL` / request host) |

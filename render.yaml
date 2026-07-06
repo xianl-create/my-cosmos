@@ -4,7 +4,10 @@ services:
   - type: web
     name: my-cosmos
     runtime: node
-    plan: free
+    # Starter ($7/mo): no spin-down, so the demo is always warm (no ~1 min cold
+    # start). Switch to `free` to accept spin-down at $0. Data lives in GitHub
+    # either way, since both plans have ephemeral disk.
+    plan: starter
     # node-pty / ws are optionalDependencies (local in-app terminal only) —
     # skip them so the build needs no native compilation.
     buildCommand: npm install --omit=optional
@@ -21,3 +24,15 @@ services:
         sync: false
       - key: MY_COSMOS_GH_BRANCH
         value: main
+      # Email verification (Resend). When MY_COSMOS_RESEND_KEY is set in PUBLIC
+      # mode, new accounts must confirm their email before they can sign in.
+      # Get a key at resend.com; the test sender onboarding@resend.dev works
+      # immediately (swap MY_COSMOS_MAIL_FROM for a verified domain later).
+      - key: MY_COSMOS_RESEND_KEY # Resend API key — set in dashboard, never commit
+        sync: false
+      - key: MY_COSMOS_MAIL_FROM
+        value: My Cosmos <onboarding@resend.dev>
+      # Base URL used to build verification links. Render injects RENDER_EXTERNAL_URL
+      # automatically; set MY_COSMOS_PUBLIC_URL only to override (e.g. a custom domain).
+      - key: MY_COSMOS_PUBLIC_URL
+        sync: false

@@ -900,6 +900,9 @@ function syncPrepareArtifactsFromDisk() {
 const AUTH_FILE = path.join(DATA_DIR, 'auth.json');
 const SESSION_TTL_MS = 7 * 24 * 3600 * 1000;
 const MIN_PASSWORD_LEN = 8;
+/** Public-demo account cap: registration is refused once this many accounts exist
+ *  (override with MY_COSMOS_MAX_ACCOUNTS). Existing users can always still sign in. */
+const MAX_ACCOUNTS = parseInt(process.env.MY_COSMOS_MAX_ACCOUNTS, 10) || 50;
 let _authDb = null;
 
 function loadAuthDb() {
@@ -916,6 +919,105 @@ function saveAuthDb() {
 }
 function hashPassword(password, saltHex) {
   return crypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), 64).toString('hex');
+}
+
+/* ── Email verification (public mode) ──────────────────────────────────────
+   Sends account-verification emails via the Resend HTTPS API (same built-in
+   `https` transport the GitHub sync uses — still zero npm deps). Verification
+   is only REQUIRED when both PUBLIC_MODE and a mail key are set; otherwise
+   accounts are auto-verified so local/dev behavior is unchanged. */
+const RESEND_KEY = process.env.MY_COSMOS_RESEND_KEY || process.env.RESEND_API_KEY || '';
+const MAIL_FROM = process.env.MY_COSMOS_MAIL_FROM || 'My Cosmos <onboarding@resend.dev>';
+const MAIL_ENABLED = !!RESEND_KEY;
+const VERIFY_TTL_MS = 24 * 3600 * 1000;
+const REQUIRE_EMAIL_VERIFY = PUBLIC_MODE && MAIL_ENABLED;
+
+function isValidEmail(e) { return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(e || '')); }
+function htmlEscape(s) { return String(s || '').replace(/[<>&"]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' }[c])); }
+
+/** Public base URL for building verification links. Prefers explicit config, then
+ *  Render's injected URL, then the request's forwarded host (works behind Render's proxy). */
+function baseUrlFromReq(req) {
+  const cfg = (process.env.MY_COSMOS_PUBLIC_URL || process.env.RENDER_EXTERNAL_URL || '').trim();
+  if (cfg) return cfg.replace(/\/+$/, '');
+  const proto = String((req && req.headers['x-forwarded-proto']) || '').split(',')[0].trim() || 'https';
+  const host = (req && req.headers.host) || `localhost:${PORT}`;
+  return `${proto}://${host}`;
+}
+
+function sendResendEmail(to, subject, html) {
+  return new Promise((resolve) => {
+    if (!MAIL_ENABLED) { resolve({ ok: false, error: 'email not configured' }); return; }
+    const payload = Buffer.from(JSON.stringify({ from: MAIL_FROM, to: [to], subject, html }), 'utf8');
+    const r = https.request({
+      method: 'POST', hostname: 'api.resend.com', path: '/emails',
+      headers: { 'Authorization': `Bearer ${RESEND_KEY}`, 'Content-Type': 'application/json', 'Content-Length': payload.length },
+    }, (resp) => {
+      let b = ''; resp.setEncoding('utf8'); resp.on('data', (c) => { b += c; });
+      resp.on('end', () => resolve({ ok: resp.statusCode >= 200 && resp.statusCode < 300, status: resp.statusCode, body: b }));
+    });
+    r.on('error', (e) => resolve({ ok: false, error: e.message }));
+    r.setTimeout(20000, () => { try { r.destroy(new Error('email timeout')); } catch (_) {} });
+    r.write(payload); r.end();
+  });
+}
+
+function verificationEmailHtml(firstName, link) {
+  const name = firstName ? htmlEscape(firstName) : 'there';
+  const safeLink = htmlEscape(link);
+  return `<div style="font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;max-width:480px;margin:0 auto;padding:24px;color:#1e1b4b">
+    <h2 style="margin:0 0 12px">Welcome to My Cosmos, ${name} 👋</h2>
+    <p style="line-height:1.5;color:#374151">Confirm your email address to activate your account.</p>
+    <p style="margin:24px 0"><a href="${safeLink}" style="background:#7c3aed;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;display:inline-block;font-weight:600">Verify my email</a></p>
+    <p style="font-size:12px;color:#6b7280;line-height:1.5">Or paste this link into your browser:<br><span style="word-break:break-all">${safeLink}</span></p>
+    <p style="font-size:12px;color:#9ca3af;margin-top:24px">This link expires in 24 hours. If you didn't create this account, you can ignore this email.</p>
+  </div>`;
+}
+
+/** Result page shown when the user clicks the verification link. */
+function verifyResultHtml(vr, appUrl) {
+  const ok = vr && vr.ok;
+  const title = ok ? 'Email verified ✓' : (vr && vr.reason === 'expired' ? 'Link expired' : 'Verification failed');
+  const msg = ok
+    ? 'Your account is now active. You can sign in to My Cosmos.'
+    : (vr && vr.reason === 'expired'
+      ? 'This verification link has expired. Sign in and use “Resend verification email” to get a fresh one.'
+      : 'This verification link is invalid or has already been used.');
+  return `<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>${title}</title></head>
+  <body style="margin:0;background:#0b1020;color:#e5e7eb;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;display:flex;min-height:100vh;align-items:center;justify-content:center">
+    <div style="max-width:420px;padding:32px;text-align:center">
+      <h1 style="font-size:22px;margin:0 0 12px;color:${ok ? '#a78bfa' : '#fca5a5'}">${title}</h1>
+      <p style="line-height:1.5;color:#cbd5e1">${msg}</p>
+      <p style="margin-top:24px"><a href="${htmlEscape(appUrl)}" style="background:#7c3aed;color:#fff;text-decoration:none;padding:12px 22px;border-radius:8px;display:inline-block;font-weight:600">Go to My Cosmos</a></p>
+    </div>
+  </body></html>`;
+}
+
+/** Issue (or re-issue) a verification token for an account record and email it. */
+async function sendVerificationFor(rec, req) {
+  const token = crypto.randomBytes(24).toString('hex');
+  rec.verifyToken = token;
+  rec.verifyExpires = Date.now() + VERIFY_TTL_MS;
+  saveAuthDb();
+  const link = `${baseUrlFromReq(req)}/api/auth/verify?token=${token}`;
+  return sendResendEmail(rec.email, 'Verify your My Cosmos account', verificationEmailHtml(rec.firstName, link));
+}
+
+/** Consume a verification token: flips the matching account to verified:true. */
+function verifyEmailToken(token) {
+  token = String(token || '');
+  if (!token) return { ok: false, reason: 'invalid' };
+  const db = loadAuthDb();
+  for (const rec of Object.values(db.users)) {
+    if (rec && rec.verifyToken === token) {
+      if (rec.verifyExpires && Date.now() > rec.verifyExpires) return { ok: false, reason: 'expired' };
+      rec.verified = true;
+      delete rec.verifyToken; delete rec.verifyExpires;
+      saveAuthDb();
+      return { ok: true };
+    }
+  }
+  return { ok: false, reason: 'invalid' };
 }
 
 const _sessions = new Map(); // token -> { user, exp }
@@ -935,11 +1037,17 @@ function sessionUser(req, url) {
   return s.user;
 }
 
-/* Basic per-IP limiter for the auth endpoints (public mode only). */
+/* Basic per-IP limiter for the auth endpoints (public mode only). Uses the LAST
+ * X-Forwarded-For hop — the one appended by Render's proxy — which the client
+ * cannot spoof (anything the client puts in XFF ends up to the left of it).
+ * Falls back to the socket address when there's no proxy (local testing). */
 const _authAttempts = new Map(); // ip -> { n, resetAt }
+function clientIp(req) {
+  const hops = String(req.headers['x-forwarded-for'] || '').split(',').map((s) => s.trim()).filter(Boolean);
+  return hops.length ? hops[hops.length - 1] : ((req.socket && req.socket.remoteAddress) || 'unknown');
+}
 function authRateLimited(req) {
-  const xf = String(req.headers['x-forwarded-for'] || '').split(',')[0].trim();
-  const ip = xf || (req.socket && req.socket.remoteAddress) || 'unknown';
+  const ip = clientIp(req);
   const now = Date.now();
   if (_authAttempts.size > 10000) _authAttempts.clear(); // memory backstop
   let rec = _authAttempts.get(ip);
@@ -952,18 +1060,50 @@ function userDataFileExists(base) {
   return fs.existsSync(path.join(DATA_DIR, `${base}_data.json`))
     || fs.existsSync(path.join(DATA_DIR, `${base}.json`));
 }
-function handleAuthRegister(body) {
+async function handleAuthRegister(body, req) {
   const base = storageBaseKey(sanitize(String((body && body.username) || '')));
   const password = String((body && body.password) || '');
+  const email = String((body && body.email) || '').trim();
+  const firstName = String((body && body.firstName) || '').trim().slice(0, 60);
+  const lastName = String((body && body.lastName) || '').trim().slice(0, 60);
   if (!base || base.length < 2) return { ok: false, error: 'Username needs at least 2 characters (letters, numbers, - or _).' };
   if (base === 'template-user') return { ok: false, error: 'That name is reserved.' };
   if (password.length < MIN_PASSWORD_LEN) return { ok: false, error: `Password needs at least ${MIN_PASSWORD_LEN} characters.` };
+  // First/last name + a valid email are mandatory only when verification is active.
+  if (REQUIRE_EMAIL_VERIFY) {
+    if (!firstName) return { ok: false, error: 'Enter your first name.' };
+    if (!lastName) return { ok: false, error: 'Enter your last name.' };
+    if (!isValidEmail(email)) return { ok: false, error: 'Enter a valid email address.' };
+  }
   const db = loadAuthDb();
+  if (PUBLIC_MODE && !db.users[base] && Object.keys(db.users).length >= MAX_ACCOUNTS) {
+    return { ok: false, error: 'This demo has reached its maximum number of accounts. Please check back later.' };
+  }
   if (db.users[base] || userDataFileExists(base)) return { ok: false, error: 'That username is already taken.' };
+  if (email && isValidEmail(email)) {
+    const emailLower = email.toLowerCase();
+    for (const u of Object.values(db.users)) {
+      if (u && u.emailLower === emailLower) return { ok: false, error: 'That email is already registered.' };
+    }
+  }
   const salt = crypto.randomBytes(16).toString('hex');
-  db.users[base] = { salt, hash: hashPassword(password, salt), createdAt: new Date().toISOString() };
+  const rec = { salt, hash: hashPassword(password, salt), createdAt: new Date().toISOString() };
+  if (firstName) rec.firstName = firstName;
+  if (lastName) rec.lastName = lastName;
+  if (email && isValidEmail(email)) { rec.email = email; rec.emailLower = email.toLowerCase(); }
+  rec.verified = !REQUIRE_EMAIL_VERIFY; // no-mail / local: auto-verified (preserves prior behavior)
+  db.users[base] = rec;
   saveAuthDb();
-  console.log(`👤 Registered account: ${base}`);
+  console.log(`👤 Registered account: ${base}${REQUIRE_EMAIL_VERIFY ? ' (pending email verification)' : ''}`);
+  if (REQUIRE_EMAIL_VERIFY) {
+    const sent = await sendVerificationFor(rec, req);
+    if (!sent.ok) {
+      console.warn(`⚠️  Verification email failed for ${base}: ${sent.error || sent.status || ''}`);
+      return { ok: true, pendingVerification: true, email, emailSent: false,
+        error: 'Account created, but the verification email could not be sent. Try “Resend” in a moment.' };
+    }
+    return { ok: true, pendingVerification: true, email, emailSent: true };
+  }
   return { ok: true, username: base, token: createSession(base) };
 }
 function handleAuthLogin(body) {
@@ -977,7 +1117,19 @@ function handleAuthLogin(body) {
     match = crypto.timingSafeEqual(Buffer.from(rec.hash, 'hex'), Buffer.from(hashPassword(password, rec.salt), 'hex'));
   } catch (_) { match = false; }
   if (!match) return fail;
+  // Block sign-in until the address is confirmed (only when verification is active).
+  if (REQUIRE_EMAIL_VERIFY && rec.verified === false) {
+    return { ok: false, needVerify: true, error: 'Please verify your email before signing in. Check your inbox, or resend the link below.' };
+  }
   return { ok: true, username: base, token: createSession(base) };
+}
+/** Resend a verification link. Always returns ok so it never reveals which usernames exist. */
+async function handleAuthResend(body, req) {
+  const base = storageBaseKey(sanitize(String((body && body.username) || '')));
+  const rec = loadAuthDb().users[base];
+  if (!rec || rec.verified !== false || !rec.email || !MAIL_ENABLED) return { ok: true };
+  const sent = await sendVerificationFor(rec, req);
+  return { ok: true, emailSent: !!sent.ok };
 }
 function removeAuthUser(base) {
   const db = loadAuthDb();
@@ -1174,7 +1326,7 @@ const server = http.createServer(async (req, res) => {
 
   if (p === '/api/health' && req.method === 'GET') {
     sendJSON(res, 200, PUBLIC_MODE
-      ? { ok: true, port: PORT, publicMode: true }
+      ? { ok: true, port: PORT, publicMode: true, emailVerify: REQUIRE_EMAIL_VERIFY }
       : { ok: true, port: PORT, dataDir: DATA_DIR, agentsLocalApi: true, publicMode: false });
     return;
   }
@@ -1185,9 +1337,17 @@ const server = http.createServer(async (req, res) => {
       sendJSON(res, 429, { ok: false, error: 'Too many attempts — try again in a few minutes.' });
       return;
     }
+    // Verify link is clicked from an email (GET) — return a friendly HTML page, not JSON.
+    if (p === '/api/auth/verify' && req.method === 'GET') {
+      const vr = verifyEmailToken(url.searchParams.get('token'));
+      res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+      res.end(verifyResultHtml(vr, `${baseUrlFromReq(req)}/index.html`));
+      return;
+    }
     try {
-      if (p === '/api/auth/register' && req.method === 'POST') { sendJSON(res, 200, handleAuthRegister(await readBody(req))); return; }
+      if (p === '/api/auth/register' && req.method === 'POST') { sendJSON(res, 200, await handleAuthRegister(await readBody(req), req)); return; }
       if (p === '/api/auth/login' && req.method === 'POST') { sendJSON(res, 200, handleAuthLogin(await readBody(req))); return; }
+      if (p === '/api/auth/resend' && req.method === 'POST') { sendJSON(res, 200, await handleAuthResend(await readBody(req), req)); return; }
       if (p === '/api/auth/logout' && req.method === 'POST') {
         _sessions.delete(String(req.headers['x-auth-token'] || ''));
         sendJSON(res, 200, { ok: true });

@@ -36566,6 +36566,86 @@ function publicAuthSetLoading(on,label){
 }
 /* Phone-only: slide the right details panel in/out (see #rp-mobile-toggle / #mc-online-css). */
 function toggleRpMobile(){try{document.body.classList.toggle('rp-mobile-open');}catch(_){}}
+
+/* ── Touch: tap a calendar event = click it (expand to full content) ──────────
+   Calendar events toggle open via an inline onclick. On a phone a tap sometimes
+   doesn't produce that click reliably (the event sits in a pan/zoom scroll area).
+   Bridge it: detect a clean tap on a .cal-event and run its click, suppressing the
+   browser's own ghost-click so it can't double-toggle. */
+(function(){
+  if(!('ontouchstart' in window))return;
+  let sx=0,sy=0,st=0;
+  document.addEventListener('touchstart',(e)=>{
+    if(e.touches&&e.touches.length===1){sx=e.touches[0].clientX;sy=e.touches[0].clientY;st=Date.now();}
+  },{passive:true,capture:true});
+  document.addEventListener('touchend',(e)=>{
+    const cont=document.getElementById('calendar-scroll-container');
+    if(!cont||!e.target||!cont.contains(e.target))return;
+    const ch=e.changedTouches&&e.changedTouches[0];if(!ch)return;
+    if(Date.now()-st>500||Math.abs(ch.clientX-sx)>10||Math.abs(ch.clientY-sy)>10)return; // drag/scroll/long-press, not a tap
+    const evEl=e.target.closest&&e.target.closest('.cal-event,.cal-all-day-event');
+    if(!evEl)return;
+    if(e.target.closest('.cal-event-delete,.cal-event-edit-btn,.cal-event-note-btn,.cal-event-resize,a'))return; // let controls act normally
+    e.preventDefault();     // drop the ghost click so we toggle exactly once
+    try{evEl.click();}catch(_){}
+  },{passive:false,capture:true});
+})();
+
+/* ── Touch: long-press a resize handle, then drag = mouse drag ────────────────
+   Panel dividers and event/figure resize handles are driven by mouse events, which
+   a touch drag never generates (only pointer events, which those handlers don't
+   listen for). So on touch we long-press to "grab" the handle, then forward the
+   drag as synthetic mousedown/mousemove/mouseup. Scoped to elements whose cursor is
+   a *-resize handle, so normal taps, scrolling, the graph and pointer-based
+   resizers (which already work on touch) are untouched. */
+(function(){
+  if(!('ontouchstart' in window))return;
+  const LONG_MS=340,MOVE_TOL=12;
+  let s=null;
+  function handleAt(x,y){
+    let el=document.elementFromPoint(x,y);
+    for(let i=0;el&&i<4;i++,el=el.parentElement){
+      let c='';try{c=getComputedStyle(el).cursor||'';}catch(_){}
+      if(/resize/.test(c))return el;
+    }
+    return null;
+  }
+  function fire(type,x,y,target,buttons){
+    try{target.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,view:window,clientX:x,clientY:y,button:0,buttons:buttons}));}catch(_){}
+  }
+  document.addEventListener('touchstart',(e)=>{
+    if(s){clearTimeout(s.timer);s=null;}
+    if(!e.touches||e.touches.length!==1)return;
+    const t=e.touches[0],h=handleAt(t.clientX,t.clientY);
+    if(!h)return;
+    // Prevent the browser's own compatibility mouse events (so only ours drive the
+    // handler) and stop the page from scrolling out from under the grab.
+    try{e.preventDefault();}catch(_){}
+    s={x0:t.clientX,y0:t.clientY,x:t.clientX,y:t.clientY,h,active:false,timer:null};
+    s.timer=setTimeout(()=>{
+      if(!s)return;s.active=true;
+      try{navigator.vibrate&&navigator.vibrate(18);}catch(_){}
+      fire('mousedown',s.x,s.y,s.h,1);
+    },LONG_MS);
+  },{passive:false,capture:true});
+  document.addEventListener('touchmove',(e)=>{
+    if(!s)return;
+    const t=e.touches[0];s.x=t.clientX;s.y=t.clientY;
+    if(!s.active){ // moved before the long-press fired → treat as a scroll, cancel
+      if(Math.abs(t.clientX-s.x0)>MOVE_TOL||Math.abs(t.clientY-s.y0)>MOVE_TOL){clearTimeout(s.timer);s=null;}
+      return;
+    }
+    try{e.preventDefault();}catch(_){}
+    fire('mousemove',s.x,s.y,document,1);
+  },{passive:false,capture:true});
+  function end(){
+    if(!s)return;clearTimeout(s.timer);
+    if(s.active)fire('mouseup',s.x,s.y,document,0);
+    s=null;
+  }
+  document.addEventListener('touchend',end,{passive:true,capture:true});
+  document.addEventListener('touchcancel',end,{passive:true,capture:true});
+})();
 /* Ask the server to re-send the verification email for the entered username. */
 async function publicAuthResend(){
   const nameInp=document.getElementById('lg-name');

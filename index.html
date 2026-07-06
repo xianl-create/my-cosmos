@@ -20,9 +20,10 @@
     if(!isPhone)return;
     var vp=document.querySelector('meta[name=viewport]');
     if(!vp){vp=document.createElement('meta');vp.setAttribute('name','viewport');document.head.appendChild(vp);}
-    // width=1280 → full desktop layout, fit-to-width (zoomed way out); scalable so
-    // pinch zoom in/out and drag-to-pan behave like the desktop cmd +/- and scroll.
-    vp.setAttribute('content','width=1280, minimum-scale=0.1, maximum-scale=6, user-scalable=yes');
+    // width=1100 → full desktop layout, fit-to-width (zoomed out) but a bit larger
+    // than a true desktop so icons/buttons are easier to tap; scalable so pinch
+    // zoom in/out and drag-to-pan behave like the desktop cmd +/- and scroll.
+    vp.setAttribute('content','width=1100, minimum-scale=0.1, maximum-scale=6, user-scalable=yes');
     document.documentElement.setAttribute('data-mc-phone','1');
     window.__MC_PHONE__=true;
   }catch(e){}

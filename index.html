@@ -5,6 +5,30 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>My Cosmos</title>
 <script>
+/* Phone display mode: the app is a desktop-first layout, so on a phone we render
+   it at full desktop width and let the browser fit it to the screen (everything
+   shrinks so every button is visible), then allow native pinch-to-zoom and
+   one-finger pan/scroll — exactly like viewing a desktop site on a phone. Runs
+   before layout so there's no flash of the squeezed device-width view. */
+(function(){
+  try{
+    var ua=navigator.userAgent||navigator.vendor||'';
+    var coarse=window.matchMedia&&window.matchMedia('(pointer:coarse)').matches;
+    var minDim=Math.min(screen.width||9999,screen.height||9999);
+    var isPhone=/iPhone|iPod|Android.*Mobile|Windows Phone|BlackBerry|IEMobile|Opera Mini|Mobi/i.test(ua)
+      || (coarse && minDim<=520);
+    if(!isPhone)return;
+    var vp=document.querySelector('meta[name=viewport]');
+    if(!vp){vp=document.createElement('meta');vp.setAttribute('name','viewport');document.head.appendChild(vp);}
+    // width=1280 → full desktop layout, fit-to-width (zoomed way out); scalable so
+    // pinch zoom in/out and drag-to-pan behave like the desktop cmd +/- and scroll.
+    vp.setAttribute('content','width=1280, minimum-scale=0.1, maximum-scale=6, user-scalable=yes');
+    document.documentElement.setAttribute('data-mc-phone','1');
+    window.__MC_PHONE__=true;
+  }catch(e){}
+})();
+</script>
+<script>
 (function(){
   if(typeof location==='undefined'||location.protocol!=='file:')return;
   try{if(sessionStorage.getItem('pn-skip-localhost')==='1')return;}catch(e1){return;}

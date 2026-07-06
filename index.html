@@ -117,6 +117,19 @@
   /* Login card gets edge padding so inputs don't touch the screen sides. */
   .lbox{padding:0 14px;box-sizing:border-box}
 }
+
+/* ── Phone (data-mc-phone): the app renders at full desktop width and the user
+   pinch-zooms to read. A few scroll areas set `touch-action` WITHOUT the
+   `pinch-zoom` token, which silently blocks two-finger zoom while your fingers
+   are over them — re-add the token so pinch-to-zoom works over the calendar. ── */
+[data-mc-phone] #calendar-scroll-container{touch-action:pan-x pan-y pinch-zoom!important}
+
+/* Tapping a calendar event expands it (JS grows its height + floats it above
+   neighbours at z-index:1000). On a phone the day column is narrow, so also widen
+   the opened event past the column so the full text reads without extra zooming. */
+[data-mc-phone] .cal-event.expanded{width:340px!important;max-width:none!important;white-space:normal;overflow:auto}
+[data-mc-phone] .cal-event.expanded .cal-event-name,
+[data-mc-phone] .cal-event.expanded .cal-event-desc{white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
 </style>
 </head>
 <body>

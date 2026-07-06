@@ -16718,6 +16718,13 @@ function pageAgentsAutoFocusLastOperated(){
 }
 
 function pageAgentsEnsureMotionLoop(){
+  // Phones have a hard per-tab memory ceiling. Combined with a large account
+  // (multi-MB graph + agents archive), the continuous O(N²) physics loop that
+  // writes styles every frame can tip the tab over its limit — the browser then
+  // discards/reloads it, which lands the user back on the login screen. Sprites
+  // are already positioned at creation, so skipping the loop renders the agents
+  // world statically instead of crashing.
+  if(window.__MC_PHONE__)return;
   if(pageAgentsRaf!==null)return;
   const footOff=10;
   const tick=()=>{

@@ -22,6 +22,13 @@ let WSServer = null;
 try { nodePty = require('node-pty'); } catch (_) { /* terminal column will report missing dep */ }
 try { WSServer = require('ws').WebSocketServer; } catch (_) { /* same */ }
 
+/* Keep the process alive on stray async errors. Node exits by default on an
+   unhandled promise rejection, which on a hosted single-instance deployment
+   shows up as brief `x-render-routing: no-server` blips while the container
+   restarts. Log and continue instead — a personal/demo server should stay up. */
+process.on('unhandledRejection', (err) => { console.error('unhandledRejection:', (err && err.stack) || err); });
+process.on('uncaughtException', (err) => { console.error('uncaughtException:', (err && err.stack) || err); });
+
 const PORT = parseInt(process.env.MY_COSMOS_PORT || process.env.PORT, 10) || 3000;
 /** Public hosted deployment (MY_COSMOS_PUBLIC=1): per-account auth is enforced, the
  *  local-only pages/APIs are disabled, and data/ is never served or embedded. The
@@ -2033,7 +2040,7 @@ const ptyHeartbeat = setInterval(() => {
 if (ptyHeartbeat.unref) ptyHeartbeat.unref();
 
 ghHydrateDataDir().then(() => {
-  server.listen(PORT, () => {
+  server.listen(PORT, '0.0.0.0', () => {
     syncPrepareArtifactsFromDisk();
     console.log(`\n🌐 My Cosmos`);
     console.log(`   http://localhost:${PORT}`);

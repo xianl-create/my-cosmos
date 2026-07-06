@@ -1113,13 +1113,17 @@ function userDataFileExists(base) {
   return fs.existsSync(path.join(DATA_DIR, `${base}_data.json`))
     || fs.existsSync(path.join(DATA_DIR, `${base}.json`));
 }
+/** Per-account cloud cap in MB. Beta accounts may carry a `limitMb` override
+ *  (e.g. insider accounts); everyone else uses the global MAX_USER_MB. */
+function userLimitMb(rec) { return (rec && rec.limitMb) ? rec.limitMb : MAX_USER_MB; }
 /** Storage tier + limits summary for API responses. */
 function tierInfo(rec) {
   const tier = (rec && rec.tier) === 'beta' ? 'beta' : 'ephemeral';
+  const limMb = userLimitMb(rec);
   return {
     tier,
-    storageLimitMb: tier === 'beta' ? MAX_USER_MB : 0,
-    storageLimitBytes: tier === 'beta' ? MAX_USER_BYTES : 0,
+    storageLimitMb: tier === 'beta' ? limMb : 0,
+    storageLimitBytes: tier === 'beta' ? limMb * 1024 * 1024 : 0,
     usedBytes: (rec && rec.bytes) || 0,
   };
 }
@@ -1493,13 +1497,21 @@ const server = http.createServer(async (req, res) => {
     const accounts = Object.keys(users).sort().map((u) => {
       const rec = users[u];
       const name = [rec.firstName, rec.lastName].filter(Boolean).join(' ');
+      const isBeta = (rec.tier || 'ephemeral') === 'beta';
       return { account: u, tier: rec.tier || 'ephemeral', pin: pinByAccount[u] || null,
+        limitMb: isBeta ? userLimitMb(rec) : 0,
         email: rec.email || null, name: name || null, lastLogin: rec.lastLogin || null,
         usedBytes: rec.bytes || 0, usedMb: +(((rec.bytes || 0) / 1048576).toFixed(2)) };
     });
+    // Planned storage = PIN slots (each at the default cap) + any beta accounts
+    // that don't hold a PIN (insiders), each at their own cap.
+    const pinPlannedMb = rows.length * MAX_USER_MB;
+    const insiderPlannedMb = accounts.filter((a) => a.tier === 'beta' && !a.pin).reduce((s, a) => s + a.limitMb, 0);
     sendJSON(res, 200, { ok: true, limitMb: MAX_USER_MB,
       pinsTotal: rows.length, pinsUsed: rows.filter((r) => r.account).length,
       accountsTotal: accounts.length, betaAccounts: accounts.filter((a) => a.tier === 'beta').length,
+      plannedStorageMb: pinPlannedMb + insiderPlannedMb,
+      plannedStorageBreakdown: { pinSlotsMb: pinPlannedMb, insiderAccountsMb: insiderPlannedMb },
       accounts, pins: rows, ephemeralAccounts: ephemeral });
     return;
   }
@@ -1670,12 +1682,13 @@ const server = http.createServer(async (req, res) => {
           return sendJSON(res, 200, { ok: false, ephemeral: true,
             error: 'Your work is saved in this browser only. Enter an invite PIN to enable cloud backup.' });
         }
-        // Beta accounts: hard cap. Over the limit → red alert + payment required.
-        if (bytes > MAX_USER_BYTES) {
+        // Beta accounts: hard cap (per-account override or global). Over → red alert.
+        const capMb = userLimitMb(rec);
+        if (bytes > capMb * 1048576) {
           rec.lastLogin = now; saveAuthDb();
           return sendJSON(res, 413, { ok: false, overLimit: true,
-            limitMb: MAX_USER_MB, usedMb: +(bytes / 1048576).toFixed(2),
-            error: `Storage limit reached (${MAX_USER_MB} MB). Upgrade to keep saving to the cloud — new changes are held in this browser for now.` });
+            limitMb: capMb, usedMb: +(bytes / 1048576).toFixed(2),
+            error: `Storage limit reached (${capMb} MB). Upgrade to keep saving to the cloud — new changes are held in this browser for now.` });
         }
         rec.bytes = bytes; rec.lastLogin = now; saveAuthDb();
       }

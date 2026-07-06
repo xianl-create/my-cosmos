@@ -131,6 +131,29 @@
 [data-mc-phone] .cal-event.expanded{width:340px!important;max-width:none!important;white-space:normal;overflow:auto}
 [data-mc-phone] .cal-event.expanded .cal-event-name,
 [data-mc-phone] .cal-event.expanded .cal-event-desc{white-space:normal!important;overflow:visible!important;text-overflow:clip!important}
+
+/* ── Phone: bigger left sidebar + top toolbar (≈+50% footprint) so icons are
+   comfortably tappable. `zoom` scales size AND reflows surrounding layout (unlike
+   transform), so #center adjusts automatically. overflow keeps the scaled content
+   scrollable instead of clipping. ── */
+[data-mc-phone] #ls{zoom:1.5;overflow-y:auto}
+[data-mc-phone] #top-bar{zoom:1.5;overflow-x:auto;overflow-y:visible}
+[data-mc-phone] #top-bar>*{flex-shrink:0}
+
+/* ── Phone: larger task-row text in the right panel (+20%) so the list reads. ── */
+[data-mc-phone] #rp .rt-header,
+[data-mc-phone] #rp .rt-name{font-size:16.8px}
+[data-mc-phone] #rp .rt-pct,
+[data-mc-phone] #rp .rt-arrow,
+[data-mc-phone] #rp .rt-add button{font-size:14.4px}
+[data-mc-phone] #rp .rt-add input{font-size:15.6px}
+
+/* ── Phone: the today's-to-do top edge is a hard-to-hit 8px ns-resize bar. Give it
+   a taller hit area with a visible grip; immediate press-and-drag is wired in
+   js/app.js (single press activates it, then drag tunes the edge). ── */
+[data-mc-phone] #rp-todo-divider{height:30px!important;top:-15px!important;background:transparent!important;display:flex;align-items:center;justify-content:center;touch-action:none}
+[data-mc-phone] #rp-todo-divider::before{content:'';width:52px;height:5px;border-radius:3px;background:var(--t3);opacity:.8}
+[data-mc-phone] #rp-todo-divider.rp-todo-divider--active::before{background:var(--acc);opacity:1}
 </style>
 </head>
 <body>

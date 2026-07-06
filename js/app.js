@@ -6718,7 +6718,12 @@ function rPanel(){
       const headerTotalHeight=headerHeight+searchHeight;
       // Default to bottom of panel, but allow it to be positioned higher
       const defaultHeight=300;
-      const defaultTop=Math.max(headerTotalHeight+10,rpPanel.offsetHeight-defaultHeight);
+      let defaultTop=Math.max(headerTotalHeight+10,rpPanel.offsetHeight-defaultHeight);
+      // On phones the panel is tall and a bottom-anchored 300px section leaves the
+      // list cramped — start it at the vertical centre so there's room for content.
+      if(window.__MC_PHONE__){
+        defaultTop=Math.max(headerTotalHeight+10,Math.round(rpPanel.offsetHeight*0.5));
+      }
       todoSection.style.top=defaultTop+'px';
       todoSection.style.maxHeight=(rpPanel.offsetHeight-defaultTop)+'px';
     }
@@ -36605,6 +36610,7 @@ function toggleRpMobile(){try{document.body.classList.toggle('rp-mobile-open');}
   function handleAt(x,y){
     let el=document.elementFromPoint(x,y);
     for(let i=0;el&&i<4;i++,el=el.parentElement){
+      if(el.id==='rp-todo-divider')return null; // has its own immediate press-and-drag bridge
       let c='';try{c=getComputedStyle(el).cursor||'';}catch(_){}
       if(/resize/.test(c))return el;
     }
@@ -36645,6 +36651,45 @@ function toggleRpMobile(){try{document.body.classList.toggle('rp-mobile-open');}
   }
   document.addEventListener('touchend',end,{passive:true,capture:true});
   document.addEventListener('touchcancel',end,{passive:true,capture:true});
+})();
+
+/* ── Touch: today's-to-do top edge = immediate press-and-drag (no long-press) ──
+   The generic bridge above needs a 340ms hold before grabbing, which makes this
+   thin edge frustrating on a phone. Here a single touch on the (enlarged) edge
+   highlights it and starts the resize right away, forwarding mousedown/move/up to
+   the existing #rp-todo-divider mouse handler. handleAt() above skips this element
+   so the two bridges never both grab it. */
+(function(){
+  if(!('ontouchstart' in window))return;
+  let d=null;
+  function fire(type,x,y,target,buttons){
+    try{target.dispatchEvent(new MouseEvent(type,{bubbles:true,cancelable:true,view:window,clientX:x,clientY:y,button:0,buttons:buttons}));}catch(_){}
+  }
+  document.addEventListener('touchstart',(e)=>{
+    if(!e.touches||e.touches.length!==1)return;
+    const div=e.target&&e.target.closest&&e.target.closest('#rp-todo-divider');
+    if(!div)return;
+    const t=e.touches[0];
+    d={div,x:t.clientX,y:t.clientY};
+    div.classList.add('rp-todo-divider--active');
+    try{e.preventDefault();}catch(_){}
+    try{navigator.vibrate&&navigator.vibrate(12);}catch(_){}
+    fire('mousedown',d.x,d.y,div,1);
+  },{passive:false,capture:true});
+  document.addEventListener('touchmove',(e)=>{
+    if(!d)return;
+    const t=e.touches[0];d.x=t.clientX;d.y=t.clientY;
+    try{e.preventDefault();}catch(_){}
+    fire('mousemove',d.x,d.y,document,1);
+  },{passive:false,capture:true});
+  function endTodo(){
+    if(!d)return;
+    fire('mouseup',d.x,d.y,document,0);
+    try{d.div.classList.remove('rp-todo-divider--active');}catch(_){}
+    d=null;
+  }
+  document.addEventListener('touchend',endTodo,{passive:true,capture:true});
+  document.addEventListener('touchcancel',endTodo,{passive:true,capture:true});
 })();
 /* Ask the server to re-send the verification email for the entered username. */
 async function publicAuthResend(){

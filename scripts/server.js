@@ -933,13 +933,17 @@ function syncPrepareArtifactsFromDisk() {
 }
 
 /* ═══════════════════════════════════════════════════════════════════════════
-   ACCOUNTS & SESSIONS — passwords live in data/auth.json (scrypt hash + salt),
-   sessions are in-memory tokens (a server restart signs everyone out; users
-   simply log back in). Auth is only ENFORCED when MY_COSMOS_PUBLIC=1; the
-   endpoints exist in local mode too but nothing requires them.
+   ACCOUNTS & SESSIONS — passwords live in data/auth.json (scrypt hash + salt).
+   Sessions are STATELESS, HMAC-signed tokens (no in-memory session table), so
+   they survive restarts/redeploys → a signed-in user stays signed in indefinitely.
+   Each account carries a rotating `sessionNonce` in auth.json; a token is valid
+   only while its nonce still matches. Signing in rotates the nonce, which
+   invalidates the token any OTHER device is holding — enforcing one active device
+   per account so two devices can't race and clobber each other's data. Auth is
+   only ENFORCED when MY_COSMOS_PUBLIC=1; the endpoints exist locally too but
+   nothing requires them.
    ═══════════════════════════════════════════════════════════════════════════ */
 const AUTH_FILE = path.join(DATA_DIR, 'auth.json');
-const SESSION_TTL_MS = 7 * 24 * 3600 * 1000;
 const MIN_PASSWORD_LEN = 8;
 /** Public-demo account cap: registration is refused once this many accounts exist
  *  (override with MY_COSMOS_MAX_ACCOUNTS). Existing users can always still sign in. */
@@ -1107,21 +1111,52 @@ function verifyEmailToken(token) {
   return { ok: false, reason: 'invalid' };
 }
 
-const _sessions = new Map(); // token -> { user, exp }
+/* Stable HMAC key for signing session tokens. Prefer an env secret; otherwise
+ * persist a generated one in auth.json so it survives restarts (without a stable
+ * key, every redeploy would invalidate all tokens and force everyone to re-login). */
+function sessionSecret() {
+  if (process.env.MY_COSMOS_SESSION_SECRET) return String(process.env.MY_COSMOS_SESSION_SECRET);
+  const db = loadAuthDb();
+  if (!db.serverSecret) { db.serverSecret = crypto.randomBytes(32).toString('hex'); saveAuthDb(); }
+  return db.serverSecret;
+}
+/* The account's current session nonce. A signed token must carry this exact nonce
+ * to be accepted; rotating it (on login/logout) evicts whatever device held the old
+ * one. Read is pure — only `rotate` writes. */
+function userSessionNonce(base, rotate) {
+  const db = loadAuthDb();
+  const rec = db.users[base];
+  if (!rec) return '';
+  if (rotate) { rec.sessionNonce = crypto.randomBytes(12).toString('hex'); saveAuthDb(); }
+  return rec.sessionNonce || '';
+}
+function signSessionToken(base, nonce) {
+  const payload = Buffer.from(JSON.stringify({ u: base, n: nonce }), 'utf8').toString('base64url');
+  const sig = crypto.createHmac('sha256', sessionSecret()).update(payload).digest('base64url');
+  return payload + '.' + sig;
+}
+/* New login → rotate the nonce (kicking any other device), then sign a token bound
+ * to it. No expiry: the session lasts until a login elsewhere or an explicit logout
+ * rotates the nonce out from under it. */
 function createSession(user) {
-  const token = crypto.randomBytes(32).toString('hex');
-  _sessions.set(token, { user, exp: Date.now() + SESSION_TTL_MS });
-  return token;
+  return signSessionToken(user, userSessionNonce(user, true));
 }
 /** Token comes as an X-Auth-Token header, or ?authtoken= for sendBeacon (which can't set headers). */
 function sessionUser(req, url) {
   let token = String(req.headers['x-auth-token'] || '');
   if (!token && url) token = String(url.searchParams.get('authtoken') || '');
-  if (!token) return '';
-  const s = _sessions.get(token);
-  if (!s) return '';
-  if (Date.now() > s.exp) { _sessions.delete(token); return ''; }
-  return s.user;
+  const dot = token.indexOf('.');
+  if (dot <= 0) return '';
+  const payload = token.slice(0, dot), sig = token.slice(dot + 1);
+  const expect = crypto.createHmac('sha256', sessionSecret()).update(payload).digest('base64url');
+  let ok = false;
+  try { ok = crypto.timingSafeEqual(Buffer.from(sig), Buffer.from(expect)); } catch (_) { ok = false; }
+  if (!ok) return '';
+  let data; try { data = JSON.parse(Buffer.from(payload, 'base64url').toString('utf8')); } catch (_) { return ''; }
+  if (!data || !data.u) return '';
+  const cur = userSessionNonce(data.u, false);
+  if (!cur || data.n !== cur) return ''; // a newer login on another device rotated the nonce
+  return data.u;
 }
 
 /* Basic per-IP limiter for the auth endpoints (public mode only). Uses the LAST
@@ -1253,8 +1288,8 @@ async function handleAuthResend(body, req) {
 }
 function removeAuthUser(base) {
   const db = loadAuthDb();
+  // Dropping the record removes its sessionNonce too, so any live token stops validating.
   if (db.users[base]) { delete db.users[base]; saveAuthDb(); }
-  for (const [t, s] of _sessions) { if (s.user === base) _sessions.delete(t); }
 }
 
 /** Public-mode gate. Returns true if it already answered the request (caller must return).
@@ -1469,7 +1504,8 @@ const server = http.createServer(async (req, res) => {
       if (p === '/api/auth/login' && req.method === 'POST') { sendJSON(res, 200, handleAuthLogin(await readBody(req))); return; }
       if (p === '/api/auth/resend' && req.method === 'POST') { sendJSON(res, 200, await handleAuthResend(await readBody(req), req)); return; }
       if (p === '/api/auth/logout' && req.method === 'POST') {
-        _sessions.delete(String(req.headers['x-auth-token'] || ''));
+        const su = sessionUser(req, url);
+        if (su) userSessionNonce(su, true); // rotate → this token is now invalid everywhere
         sendJSON(res, 200, { ok: true });
         return;
       }

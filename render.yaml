@@ -53,3 +53,9 @@ services:
         value: "50"
       - key: MY_COSMOS_ADMIN_TOKEN # random secret — set in dashboard, never commit
         sync: false
+      # Signs stateless session tokens so sign-ins survive restarts/redeploys
+      # (users stay logged in indefinitely). Optional: if unset, the server
+      # generates + persists one in the private data repo. generateValue keeps a
+      # stable secret across deploys when this blueprint is synced.
+      - key: MY_COSMOS_SESSION_SECRET
+        generateValue: true

@@ -36361,8 +36361,9 @@ const MC_PUBLIC_TABS_SHOW=['lt-calendar','lt-notes','lt-pageagents','lt-settings
 (function(){
   const _origFetch=window.fetch.bind(window);
   window.fetch=function(input,init){
+    let u='';
     try{
-      const u=typeof input==='string'?input:((input&&input.url)||'');
+      u=typeof input==='string'?input:((input&&input.url)||'');
       if(window.__AUTH_TOKEN__&&String(u).includes('/api/')){
         init=Object.assign({},init);
         const h=new Headers(init.headers||(typeof input!=='string'&&input&&input.headers)||undefined);
@@ -36370,7 +36371,16 @@ const MC_PUBLIC_TABS_SHOW=['lt-calendar','lt-notes','lt-pageagents','lt-settings
         init.headers=h;
       }
     }catch(_){}
-    return _origFetch(input,init);
+    const p=_origFetch(input,init);
+    // Single-device sessions: a 401 on a per-user data route means our session
+    // nonce was rotated by a newer login elsewhere → we've been kicked. Detect it
+    // and drop back to the login screen (see mcHandleSessionKicked).
+    try{
+      if(window.__PUBLIC_MODE__&&window.__AUTH_TOKEN__&&/\/api\/(?:data|agents-data|usage|savepoint|savepoints)\//.test(String(u))){
+        return p.then(resp=>{try{if(resp&&resp.status===401&&typeof CU!=='undefined'&&CU)mcHandleSessionKicked();}catch(_){}return resp;});
+      }
+    }catch(_){}
+    return p;
   };
   const _xhrOpen=XMLHttpRequest.prototype.open;
   XMLHttpRequest.prototype.open=function(method,u){this.__mcApiUrl=String(u||'');return _xhrOpen.apply(this,arguments);};
@@ -36401,6 +36411,20 @@ function publicAuthMsg(text,isError){
 function publicAuthClearToken(){
   window.__AUTH_TOKEN__='';
   try{localStorage.removeItem('MyCosmos_authToken');}catch(_){}
+}
+/* A newer login on another device rotated our session nonce → the server now 401s
+   us. Drop cleanly to the login screen and explain why (don't attempt a re-save —
+   that would just 401 again). The saved account tab + password stay put so the user
+   can hop right back in. */
+function mcHandleSessionKicked(){
+  if(window.__MC_KICKED__)return; window.__MC_KICKED__=true;
+  try{publicAuthClearToken();}catch(_){}
+  try{if(typeof pageAgentsResetForUserChange==='function')pageAgentsResetForUserChange();}catch(_){}
+  try{CU=null;}catch(_){}
+  try{show('login');}catch(_){}
+  try{initLg();}catch(_){}
+  setTimeout(()=>{try{publicAuthMsg('You were signed out because this account was just opened on another device. Only one device stays signed in at a time — this protects your data from conflicting edits. Sign in again to keep using it here.',true);}catch(_){}},80);
+  setTimeout(()=>{window.__MC_KICKED__=false;},4000);
 }
 async function publicAuthLogout(){
   try{await fetch('/api/auth/logout',{method:'POST'});}catch(_){}
@@ -36585,16 +36609,19 @@ function mcPubAcctRemove(username){
   mcPubPwSet(username,'');
   mcRenderPublicAccounts();
 }
-/* Click a saved account → drop its name (and remembered password) into the form. */
+/* Click a saved account → drop its name (and remembered password) into the form.
+   If the password was remembered, sign straight in; otherwise focus the field. */
 function mcPubAcctPick(username){
   const nameInp=document.getElementById('lg-name');
   const passInp=document.getElementById('lg-pass');
   const rem=document.getElementById('lg-remember');
   if(nameInp)nameInp.value=username;
   const pw=mcPubPwGet(username);
-  if(passInp){passInp.value=pw;passInp.focus();}
+  if(passInp)passInp.value=pw;
   if(rem)rem.checked=!!pw;
   publicAuthMsg('',false);
+  if(pw){publicAuthSubmit('login');}          // auto-login with the saved password
+  else if(passInp){passInp.focus();}
 }
 function mcRenderPublicAccounts(){
   if(!window.__PUBLIC_MODE__)return;

@@ -959,6 +959,10 @@ const MAX_USER_MB = parseInt(process.env.MY_COSMOS_MAX_USER_MB, 10) || 50;
 const MAX_USER_BYTES = MAX_USER_MB * 1024 * 1024;
 const PIN_COUNT = parseInt(process.env.MY_COSMOS_PIN_COUNT, 10) || 50;
 const ADMIN_TOKEN = process.env.MY_COSMOS_ADMIN_TOKEN || '';
+/* Shared secret the local sync watcher uses to push a machine's edits straight to
+ * the cloud without a user login (so it can't kick the owner's browser session).
+ * Defaults to the admin token so no extra env var is needed. */
+const SYNC_TOKEN = process.env.MY_COSMOS_SYNC_TOKEN || ADMIN_TOKEN || '';
 const PINS_FILE = path.join(DATA_DIR, 'pins.json');
 let _authDb = null;
 let _pinsDb = null;
@@ -1317,6 +1321,12 @@ function publicModeGate(req, res, url, p) {
     let uname = owner[1];
     try { uname = decodeURIComponent(uname); } catch (_) { /* keep raw */ }
     const base = storageBaseKey(sanitize(uname));
+    // A trusted local sync watcher may present the sync token (X-Sync-Token) instead
+    // of a user session. It writes straight through — bypassing the single-device
+    // session check — so mirroring a machine's edits up to the cloud never rotates
+    // the nonce and never kicks the owner's online browser. See scripts/sync-to-cloud.js.
+    const syncTok = String(req.headers['x-sync-token'] || url.searchParams.get('synctoken') || '');
+    if (SYNC_TOKEN && syncTok && syncTok === SYNC_TOKEN) return false; // authorized sync → allow through
     const su = sessionUser(req, url);
     if (!su || su !== base) {
       sendJSON(res, 401, { error: 'Sign in required.' });

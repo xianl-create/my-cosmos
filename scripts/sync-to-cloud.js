@@ -17,10 +17,16 @@
  * view/login only; editing it online too would be overwritten on the next
  * local save.
  *
+ * Auth: prefer MC_SYNC_TOKEN (the server's sync/admin token). It writes straight
+ * through WITHOUT a login, so mirroring never rotates the session and never kicks
+ * the owner's online browser (single-device sessions). Falls back to MC_PASS login
+ * if no sync token is given.
+ *
  * Config (environment variables):
  *   MC_CLOUD_URL    hosted base URL           (default https://my-cosmos.onrender.com)
  *   MC_USER         account username          (default xianl)
- *   MC_PASS         account password          (REQUIRED — pass via env, never hard-code)
+ *   MC_SYNC_TOKEN   server sync/admin token   (preferred — no login, no session kick)
+ *   MC_PASS         account password          (fallback if no MC_SYNC_TOKEN)
  *   MC_FILE         local data file           (default data/<MC_USER>_data.json)
  *   MC_AGENTS_DIR   local agents archive dir  (default data/<MC_USER>/agents)
  *   MC_SYNC_AGENTS  "1" mirror agents too     (default "1"); "0" = graph only
@@ -39,6 +45,7 @@ const path = require('path');
 
 const CLOUD_URL = (process.env.MC_CLOUD_URL || 'https://my-cosmos.onrender.com').replace(/\/+$/, '');
 const USER = (process.env.MC_USER || 'xianl').toLowerCase().replace(/[^a-z0-9_-]/g, '');
+const SYNC_TOKEN = process.env.MC_SYNC_TOKEN || '';
 const PASS = process.env.MC_PASS || '';
 const FILE = process.env.MC_FILE || path.join(__dirname, '..', 'data', `${USER}_data.json`);
 const AGENTS_DIR = process.env.MC_AGENTS_DIR || path.join(__dirname, '..', 'data', USER, 'agents');
@@ -47,7 +54,7 @@ const WATCH = (process.env.MC_WATCH || '1') !== '0';
 const INTERVAL = parseInt(process.env.MC_INTERVAL, 10) || 2000;
 const DEBOUNCE_MS = 1500;
 
-if (!PASS) { console.error('sync-to-cloud: set MC_PASS to your cloud account password.'); process.exit(1); }
+if (!SYNC_TOKEN && !PASS) { console.error('sync-to-cloud: set MC_SYNC_TOKEN (preferred) or MC_PASS.'); process.exit(1); }
 if (!fs.existsSync(FILE)) { console.error('sync-to-cloud: local data file not found:', FILE); process.exit(1); }
 
 function ts() { return new Date().toISOString().replace('T', ' ').slice(0, 19); }
@@ -59,7 +66,8 @@ function req(method, urlPath, { token, body } = {}) {
     const payload = body != null ? Buffer.from(body, 'utf8') : null;
     const headers = { Accept: 'application/json' };
     if (payload) { headers['Content-Type'] = 'application/json'; headers['Content-Length'] = payload.length; }
-    if (token) headers['X-Auth-Token'] = token;
+    if (SYNC_TOKEN) headers['X-Sync-Token'] = SYNC_TOKEN;
+    else if (token) headers['X-Auth-Token'] = token;
     const r = lib.request({ method, hostname: u.hostname, port: u.port, path: u.pathname + u.search, headers }, (resp) => {
       let s = ''; resp.setEncoding('utf8'); resp.on('data', (d) => { s += d; });
       resp.on('end', () => { let j = null; try { j = JSON.parse(s); } catch (_) {} resolve({ status: resp.statusCode, body: j, raw: s }); });
@@ -96,8 +104,9 @@ async function pushOnce() {
     try { raw = fs.readFileSync(FILE, 'utf8'); JSON.parse(raw); } // validate JSON before uploading
     catch (e) { console.warn(`[${ts()}] skip: local file not valid JSON yet (${e.message})`); return; }
     const mb = (Buffer.byteLength(raw, 'utf8') / 1048576).toFixed(2);
-    if (!token && !(await login())) return;
+    if (!SYNC_TOKEN && !token && !(await login())) return;
     let r = await req('POST', `/api/data/${encodeURIComponent(USER)}`, { token, body: raw });
+    if (r.status === 401 && SYNC_TOKEN) { console.error(`[${ts()}] ✗ sync token rejected — check MC_SYNC_TOKEN matches the server's admin/sync token.`); return; }
     if (r.status === 401) { token = ''; if (!(await login())) return; r = await req('POST', `/api/data/${encodeURIComponent(USER)}`, { token, body: raw }); }
     if (r.status === 200 && r.body && r.body.ok) { console.log(`[${ts()}] ✓ synced ${mb} MB to ${CLOUD_URL}`); return; }
     if (r.status === 413 && r.body && r.body.overLimit) { console.error(`[${ts()}] 🚨 STORAGE LIMIT: used ${r.body.usedMb} MB of ${r.body.limitMb} MB — cloud rejected this save. Free up space or raise the cap.`); return; }
@@ -157,8 +166,9 @@ async function pushAgentsOnce() {
     if (nAgents === 0) { console.log(`[${ts()}] agents: nothing to sync (0 agents)`); return; }
     const raw = JSON.stringify(archive);
     const mb = (Buffer.byteLength(raw, 'utf8') / 1048576).toFixed(2);
-    if (!token && !(await login())) return;
+    if (!SYNC_TOKEN && !token && !(await login())) return;
     let r = await req('POST', `/api/agents-data/${encodeURIComponent(USER)}`, { token, body: raw });
+    if (r.status === 401 && SYNC_TOKEN) { console.error(`[${ts()}] ✗ agents sync token rejected — check MC_SYNC_TOKEN.`); return; }
     if (r.status === 401) { token = ''; if (!(await login())) return; r = await req('POST', `/api/agents-data/${encodeURIComponent(USER)}`, { token, body: raw }); }
     if (r.status === 200 && r.body && r.body.ok) {
       if (r.body.skipped) console.warn(`[${ts()}] ⚠ agents skipped by cloud: ${r.body.skipped}`);
@@ -174,7 +184,7 @@ async function pushAgentsOnce() {
 }
 
 (async () => {
-  console.log(`sync-to-cloud → ${CLOUD_URL}  account=${USER}  file=${path.relative(process.cwd(), FILE)}`);
+  console.log(`sync-to-cloud → ${CLOUD_URL}  account=${USER}  auth=${SYNC_TOKEN ? 'sync-token (no login)' : 'password login'}  file=${path.relative(process.cwd(), FILE)}`);
   if (SYNC_AGENTS) console.log(`  agents mirror: ${fs.existsSync(AGENTS_DIR) ? path.relative(process.cwd(), AGENTS_DIR) : '(none yet)'}`);
   await pushOnce();       // initial graph upload
   await pushAgentsOnce(); // initial agents upload

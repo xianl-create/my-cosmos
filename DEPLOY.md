@@ -73,8 +73,9 @@ gh repo create yourname/my-cosmos --public --source . --push
 
 ## Email verification (Resend)
 
-In public mode, if `MY_COSMOS_RESEND_KEY` is set, registration collects **first name,
-last name, and email**, and a new account **cannot sign in until the email is confirmed**.
+In public mode, registration **always** collects **first name, last name, and a valid
+email** (stored on the account). If `MY_COSMOS_RESEND_KEY` is also set, a new account
+**cannot sign in until the email is confirmed**.
 On register the server emails a one-time verification link (valid 24 h); clicking it flips
 the account to verified. A "Resend verification email" button covers lost/expired links.
 Names, email, and the `verified` flag live in `auth.json` (synced to the private data repo
@@ -88,12 +89,36 @@ local/dev mode is completely unchanged.
 3. Verification links use `RENDER_EXTERNAL_URL` automatically. Only set
    `MY_COSMOS_PUBLIC_URL` to override (e.g. a custom domain).
 
+## Two-tier storage & invite PINs
+
+Public mode runs two account tiers:
+
+- **Beta (PIN):** a user who redeems a valid invite PIN gets **persistent cloud storage**
+  (synced to the private data repo) up to `MY_COSMOS_MAX_USER_MB`. One PIN → one account,
+  consumed on redemption.
+- **Ephemeral (no PIN):** anyone else can still use the app, but their graph stays **only in
+  their browser**. The server stores just their email, account name, password hash, last
+  login, and total usage — never their data.
+
+`MY_COSMOS_PIN_COUNT` PINs are generated on first boot and stored in `pins.json` (private
+data repo). When a beta user exceeds their cap, saves are refused and the app shows a red
+**"storage limit reached — payment required"** alert; in-progress work is held in the browser.
+
+**View the registry (PIN → account, last login, storage used):**
+
+```bash
+curl -s "https://<your-app>.onrender.com/api/admin/pins?token=$MY_COSMOS_ADMIN_TOKEN" | python3 -m json.tool
+```
+
 ## Env var reference (additions)
 
 | Var | Meaning |
 |---|---|
 | `MY_COSMOS_PUBLIC=1` | enable public mode (auth enforced, lockdowns active) |
-| `MY_COSMOS_MAX_ACCOUNTS` | max registrations allowed (default `50`; existing users can always sign in) |
+| `MY_COSMOS_MAX_ACCOUNTS` | legacy hard cap (no longer blocks; ephemeral users are unlimited) |
+| `MY_COSMOS_PIN_COUNT` | number of invite PINs to generate (default `50`) |
+| `MY_COSMOS_MAX_USER_MB` | per-beta-user cloud storage cap in MB (default `50`) |
+| `MY_COSMOS_ADMIN_TOKEN` | secret protecting `GET /api/admin/pins` |
 | `MY_COSMOS_GH_REPO` | `owner/repo` of the private data repo (unset = sync off) |
 | `MY_COSMOS_GH_TOKEN` | fine-grained PAT with Contents read/write on that repo |
 | `MY_COSMOS_GH_BRANCH` | branch to sync (default `main`) |

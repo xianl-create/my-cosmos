@@ -36,3 +36,14 @@ services:
       # automatically; set MY_COSMOS_PUBLIC_URL only to override (e.g. a custom domain).
       - key: MY_COSMOS_PUBLIC_URL
         sync: false
+      # ── Two-tier storage / invite PINs ──
+      # PIN_COUNT invite PINs are generated on first boot (stored in the private
+      # data repo). A user who redeems a PIN gets persistent cloud storage up to
+      # MAX_USER_MB; everyone else runs browser-only (ephemeral). ADMIN_TOKEN
+      # protects GET /api/admin/pins (the PIN → account usage registry).
+      - key: MY_COSMOS_PIN_COUNT
+        value: "50"
+      - key: MY_COSMOS_MAX_USER_MB
+        value: "50"
+      - key: MY_COSMOS_ADMIN_TOKEN # random secret — set in dashboard, never commit
+        sync: false

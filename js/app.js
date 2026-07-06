@@ -688,8 +688,24 @@ const ST={
       let serverOk=false;
       try{
         const apiBase=window.location.protocol==='file:'?'http://localhost:3000':'';
-        const r=await fetch(`${apiBase}/api/data/${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(snapshot)});
-        if(r.ok){serverOk=true;anyOk=true;}
+        const bodyStr=JSON.stringify(snapshot);
+        let byteLen=bodyStr.length;
+        try{byteLen=new TextEncoder().encode(bodyStr).length;}catch(_){}
+        if(window.__PUBLIC_MODE__&&window.__MC_TIER__==='ephemeral'){
+          // Ephemeral accounts keep their graph in the browser only — never upload
+          // the full data (saves bandwidth); just report the usage size.
+          try{await fetch(`${apiBase}/api/usage/${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({bytes:byteLen})});}catch(_){}
+        }else{
+          const r=await fetch(`${apiBase}/api/data/${encodeURIComponent(key)}`,{method:'POST',headers:{'Content-Type':'application/json'},body:bodyStr});
+          if(r.ok){serverOk=true;anyOk=true;}
+          else if(r.status===413){
+            let j=null;try{j=await r.json();}catch(_){}
+            if(j&&j.overLimit)showStorageLimitAlert(j);
+          }else{
+            let j=null;try{j=await r.json();}catch(_){}
+            if(j&&j.ephemeral)window.__MC_TIER__='ephemeral'; // server downgraded us to browser-only
+          }
+        }
       }catch(e){}
 
       if(directoryHandle){
@@ -36379,17 +36395,42 @@ function publicAuthShowResend(show){
   const btn=document.getElementById('lg-resend-btn');
   if(btn)btn.style.display=show?'':'none';
 }
+/* Remember the signed-in account's storage tier so saves know whether to persist
+   to the cloud (beta) or keep data browser-only (ephemeral). */
+function publicAuthSetTier(j){
+  window.__MC_TIER__=(j&&j.tier)||'ephemeral';
+  window.__MC_STORAGE_LIMIT__=(j&&j.storageLimitBytes)||0;
+}
+/* Red, blocking alert shown when a beta account exceeds its cloud storage cap. */
+function showStorageLimitAlert(info){
+  info=info||{};
+  if(window.__MC_STORAGE_ALERT_OPEN__)return;
+  window.__MC_STORAGE_ALERT_OPEN__=true;
+  const limit=info.limitMb||Math.round((window.__MC_STORAGE_LIMIT__||0)/1048576)||'';
+  const used=(info.usedMb!=null&&info.usedMb!=='')?info.usedMb:'';
+  const wrap=document.createElement('div');
+  wrap.id='mc-storage-alert';
+  wrap.style.cssText='position:fixed;inset:0;z-index:100000;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;padding:20px;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif';
+  wrap.innerHTML='<div style="max-width:440px;width:100%;background:#1a1030;border:2px solid #ef4444;border-radius:14px;padding:26px;color:#fee2e2;box-shadow:0 20px 60px rgba(0,0,0,.5)">'
+    +'<div style="display:flex;align-items:center;gap:10px;margin-bottom:12px"><span style="font-size:26px">🚨</span><h2 style="margin:0;font-size:19px;color:#fca5a5">Storage limit reached</h2></div>'
+    +'<p style="line-height:1.55;margin:0 0 10px;color:#fecaca">You\u2019ve used <b>'+used+' MB</b> of your <b>'+limit+' MB</b> cloud storage. New changes are being kept in this browser only and are <b>not backed up</b> until you free up space or upgrade.</p>'
+    +'<p style="line-height:1.55;margin:0 0 18px;color:#fca5a5"><b>Payment required</b> to continue saving beyond this limit.</p>'
+    +'<div style="display:flex;gap:8px;justify-content:flex-end"><button onclick="document.getElementById(\'mc-storage-alert\').remove();window.__MC_STORAGE_ALERT_OPEN__=false" style="background:#ef4444;color:#fff;border:0;border-radius:8px;padding:10px 18px;font-weight:600;cursor:pointer">Got it</button></div>'
+    +'</div>';
+  document.body.appendChild(wrap);
+}
 async function publicAuthSubmit(mode){
   const nameInp=document.getElementById('lg-name');
   const passInp=document.getElementById('lg-pass');
   publicAuthShowResend(false);
   if(mode==='login')publicAuthShowRegisterFields(false);
-  const needProfile=mode==='register'&&window.__EMAIL_VERIFY__;
-  // When verification is on, the first "Create account" click reveals the extra fields;
-  // the second one submits. When it's off, register works as before (username + password).
+  // In the public demo, registration always collects name + email (required) and
+  // an optional invite PIN. The first "Create account" click reveals the fields;
+  // the second one submits.
+  const needProfile=mode==='register'&&window.__PUBLIC_MODE__;
   if(needProfile&&!window.__MC_REGISTER_MODE__){
     publicAuthShowRegisterFields(true);
-    publicAuthMsg('Fill in your details, then tap “Create account” again.',false);
+    publicAuthMsg('Fill in your details (email required). Have an invite PIN? Enter it to unlock cloud backup. Then tap “Create account” again.',false);
     const f=document.getElementById('lg-first');if(f)f.focus();
     return;
   }
@@ -36401,10 +36442,12 @@ async function publicAuthSubmit(mode){
     const firstName=(document.getElementById('lg-first')||{}).value||'';
     const lastName=(document.getElementById('lg-last')||{}).value||'';
     const email=((document.getElementById('lg-email')||{}).value||'').trim();
+    const pin=((document.getElementById('lg-pin')||{}).value||'').trim();
     if(!firstName.trim()){publicAuthMsg('Enter your first name.',true);return;}
     if(!lastName.trim()){publicAuthMsg('Enter your last name.',true);return;}
     if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){publicAuthMsg('Enter a valid email address.',true);return;}
     payload.firstName=firstName.trim();payload.lastName=lastName.trim();payload.email=email;
+    if(pin)payload.pin=pin;
   }
   if(!password){publicAuthMsg('Enter your password.',true);if(passInp)passInp.focus();return;}
   publicAuthMsg(mode==='register'?'Creating account…':'Signing in…',false);
@@ -36424,16 +36467,21 @@ async function publicAuthSubmit(mode){
       publicAuthShowRegisterFields(false);
       if(passInp)passInp.value='';
       const where=j.email?(' at '+j.email):'';
+      const tierNote=j.tier==='beta'?' Your invite PIN is redeemed — cloud backup is active.':'';
       publicAuthMsg(j.emailSent===false
         ? ('Account created, but the verification email failed to send. Use “Resend” below.')
-        : ('Check your email'+where+' to verify your account, then sign in.'),false);
+        : ('Check your email'+where+' to verify your account, then sign in.'+tierNote),false);
       publicAuthShowResend(true);
       return;
     }
+    publicAuthSetTier(j);
     window.__AUTH_TOKEN__=j.token||'';
     try{localStorage.setItem('MyCosmos_authToken',window.__AUTH_TOKEN__);}catch(_){}
     publicAuthMsg('',false);
     if(passInp)passInp.value='';
+    if(mode==='register'&&j.tier!=='beta'){
+      try{alert('Welcome! You’re trying the demo without an invite PIN, so your work is saved in this browser only (not backed up to the cloud). Ask for a PIN to enable cloud backup.');}catch(_){}
+    }
     await loginAs(j.username,j.username);
   }catch(e){
     publicAuthMsg('Could not reach the server — try again.',true);
@@ -36532,7 +36580,7 @@ async function publicModeDetect(){
       try{
         const w=await fetch('/api/auth/whoami');
         const wj=await w.json();
-        if(wj&&wj.ok&&wj.username){await loginAs(wj.username,wj.username);return;}
+        if(wj&&wj.ok&&wj.username){publicAuthSetTier(wj);await loginAs(wj.username,wj.username);return;}
       }catch(_){}
       publicAuthClearToken(); // stale token (server restarted or expired)
     }

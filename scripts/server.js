@@ -910,7 +910,20 @@ const MIN_PASSWORD_LEN = 8;
 /** Public-demo account cap: registration is refused once this many accounts exist
  *  (override with MY_COSMOS_MAX_ACCOUNTS). Existing users can always still sign in. */
 const MAX_ACCOUNTS = parseInt(process.env.MY_COSMOS_MAX_ACCOUNTS, 10) || 50;
+/* ── Two-tier storage (public demo) ─────────────────────────────────────────
+   • BETA tier: user redeemed a valid invite PIN → data is persisted server-side
+     (and synced to GitHub) up to MAX_USER_MB. PIN_COUNT PINs exist; one PIN maps
+     to exactly one account.
+   • EPHEMERAL tier: anyone else → the app still works but their graph lives only
+     in their own browser; the server keeps just account info (email/name/pass)
+     plus last login + total usage. */
+const MAX_USER_MB = parseInt(process.env.MY_COSMOS_MAX_USER_MB, 10) || 50;
+const MAX_USER_BYTES = MAX_USER_MB * 1024 * 1024;
+const PIN_COUNT = parseInt(process.env.MY_COSMOS_PIN_COUNT, 10) || 50;
+const ADMIN_TOKEN = process.env.MY_COSMOS_ADMIN_TOKEN || '';
+const PINS_FILE = path.join(DATA_DIR, 'pins.json');
 let _authDb = null;
+let _pinsDb = null;
 
 function loadAuthDb() {
   if (_authDb) return _authDb;
@@ -926,6 +939,39 @@ function saveAuthDb() {
 }
 function hashPassword(password, saltHex) {
   return crypto.scryptSync(String(password), Buffer.from(saltHex, 'hex'), 64).toString('hex');
+}
+
+/* ── Invite-PIN registry (data/pins.json) ──────────────────────────────────
+   Shape: { codes: { "COSMOS-XXXX-XXXX": { account: base|null, redeemedAt } } }.
+   Kept in the private data repo (never the public code repo). */
+function loadPinsDb() {
+  if (_pinsDb) return _pinsDb;
+  try { _pinsDb = JSON.parse(fs.readFileSync(PINS_FILE, 'utf8')); } catch (_) { _pinsDb = null; }
+  if (!_pinsDb || typeof _pinsDb !== 'object' || !_pinsDb.codes || typeof _pinsDb.codes !== 'object') {
+    _pinsDb = { codes: {} };
+  }
+  return _pinsDb;
+}
+function savePinsDb() {
+  atomicWriteFileSync(PINS_FILE, JSON.stringify(loadPinsDb(), null, 2));
+  ghQueue('pins.json');
+}
+function normalizePin(s) { return String(s || '').toUpperCase().replace(/[^A-Z0-9-]/g, '').trim(); }
+function genPinCode() {
+  const A = 'ABCDEFGHJKMNPQRSTUVWXYZ23456789'; // no ambiguous 0/O/1/I/L
+  const grp = () => Array.from({ length: 4 }, () => A[crypto.randomBytes(1)[0] % A.length]).join('');
+  return `COSMOS-${grp()}-${grp()}`;
+}
+/** Make sure PIN_COUNT codes exist. Generates missing ones and persists. */
+function ensurePins() {
+  const db = loadPinsDb();
+  let added = 0;
+  while (Object.keys(db.codes).length < PIN_COUNT) {
+    const c = genPinCode();
+    if (!db.codes[c]) { db.codes[c] = { account: null, redeemedAt: null }; added++; }
+  }
+  if (added) { savePinsDb(); console.log(`🔑 Seeded ${added} invite PIN(s) — ${Object.keys(db.codes).length} total.`); }
+  return db;
 }
 
 /* ── Email verification (public mode) ──────────────────────────────────────
@@ -1067,25 +1113,34 @@ function userDataFileExists(base) {
   return fs.existsSync(path.join(DATA_DIR, `${base}_data.json`))
     || fs.existsSync(path.join(DATA_DIR, `${base}.json`));
 }
+/** Storage tier + limits summary for API responses. */
+function tierInfo(rec) {
+  const tier = (rec && rec.tier) === 'beta' ? 'beta' : 'ephemeral';
+  return {
+    tier,
+    storageLimitMb: tier === 'beta' ? MAX_USER_MB : 0,
+    storageLimitBytes: tier === 'beta' ? MAX_USER_BYTES : 0,
+    usedBytes: (rec && rec.bytes) || 0,
+  };
+}
 async function handleAuthRegister(body, req) {
   const base = storageBaseKey(sanitize(String((body && body.username) || '')));
   const password = String((body && body.password) || '');
   const email = String((body && body.email) || '').trim();
   const firstName = String((body && body.firstName) || '').trim().slice(0, 60);
   const lastName = String((body && body.lastName) || '').trim().slice(0, 60);
+  const pinRaw = String((body && body.pin) || '').trim();
   if (!base || base.length < 2) return { ok: false, error: 'Username needs at least 2 characters (letters, numbers, - or _).' };
   if (base === 'template-user') return { ok: false, error: 'That name is reserved.' };
   if (password.length < MIN_PASSWORD_LEN) return { ok: false, error: `Password needs at least ${MIN_PASSWORD_LEN} characters.` };
-  // First/last name + a valid email are mandatory only when verification is active.
-  if (REQUIRE_EMAIL_VERIFY) {
+  // In the public demo, first/last name + a valid email are always required and
+  // tied to the account (verification is a separate, optional layer via Resend).
+  if (PUBLIC_MODE) {
     if (!firstName) return { ok: false, error: 'Enter your first name.' };
     if (!lastName) return { ok: false, error: 'Enter your last name.' };
     if (!isValidEmail(email)) return { ok: false, error: 'Enter a valid email address.' };
   }
   const db = loadAuthDb();
-  if (PUBLIC_MODE && !db.users[base] && Object.keys(db.users).length >= MAX_ACCOUNTS) {
-    return { ok: false, error: 'This demo has reached its maximum number of accounts. Please check back later.' };
-  }
   if (db.users[base] || userDataFileExists(base)) return { ok: false, error: 'That username is already taken.' };
   if (email && isValidEmail(email)) {
     const emailLower = email.toLowerCase();
@@ -1093,30 +1148,48 @@ async function handleAuthRegister(body, req) {
       if (u && u.emailLower === emailLower) return { ok: false, error: 'That email is already registered.' };
     }
   }
+  // ── Tier: a valid, unused PIN unlocks persistent (beta) storage. ──
+  let tier = 'ephemeral';
+  let pinCode = null;
+  if (PUBLIC_MODE && pinRaw) {
+    const pins = ensurePins();
+    pinCode = normalizePin(pinRaw);
+    const entry = pins.codes[pinCode];
+    if (!entry) return { ok: false, error: 'That invite PIN isn’t valid. Leave it blank to try the demo without cloud backup.' };
+    if (entry.account) return { ok: false, error: 'That invite PIN has already been used by another account.' };
+    tier = 'beta';
+  }
   const salt = crypto.randomBytes(16).toString('hex');
-  const rec = { salt, hash: hashPassword(password, salt), createdAt: new Date().toISOString() };
+  const rec = { salt, hash: hashPassword(password, salt), createdAt: new Date().toISOString(), tier, bytes: 0 };
   if (firstName) rec.firstName = firstName;
   if (lastName) rec.lastName = lastName;
   if (email && isValidEmail(email)) { rec.email = email; rec.emailLower = email.toLowerCase(); }
+  if (tier === 'beta' && pinCode) rec.pin = pinCode;
   rec.verified = !REQUIRE_EMAIL_VERIFY; // no-mail / local: auto-verified (preserves prior behavior)
   db.users[base] = rec;
   saveAuthDb();
-  console.log(`👤 Registered account: ${base}${REQUIRE_EMAIL_VERIFY ? ' (pending email verification)' : ''}`);
+  if (tier === 'beta' && pinCode) { // bind the PIN to this account
+    const pins = ensurePins();
+    pins.codes[pinCode] = { account: base, redeemedAt: new Date().toISOString() };
+    savePinsDb();
+  }
+  console.log(`👤 Registered account: ${base} [${tier}]${REQUIRE_EMAIL_VERIFY ? ' (pending email verification)' : ''}`);
   if (REQUIRE_EMAIL_VERIFY) {
     const sent = await sendVerificationFor(rec, req);
     if (!sent.ok) {
       console.warn(`⚠️  Verification email failed for ${base}: ${sent.error || sent.status || ''}`);
-      return { ok: true, pendingVerification: true, email, emailSent: false,
+      return { ok: true, pendingVerification: true, email, emailSent: false, ...tierInfo(rec),
         error: 'Account created, but the verification email could not be sent. Try “Resend” in a moment.' };
     }
-    return { ok: true, pendingVerification: true, email, emailSent: true };
+    return { ok: true, pendingVerification: true, email, emailSent: true, ...tierInfo(rec) };
   }
-  return { ok: true, username: base, token: createSession(base) };
+  return { ok: true, username: base, token: createSession(base), ...tierInfo(rec) };
 }
 function handleAuthLogin(body) {
   const base = storageBaseKey(sanitize(String((body && body.username) || '')));
   const password = String((body && body.password) || '');
-  const rec = loadAuthDb().users[base];
+  const db = loadAuthDb();
+  const rec = db.users[base];
   const fail = { ok: false, error: 'Wrong username or password.' };
   if (!base || !rec) return fail;
   let match = false;
@@ -1128,7 +1201,9 @@ function handleAuthLogin(body) {
   if (REQUIRE_EMAIL_VERIFY && rec.verified === false) {
     return { ok: false, needVerify: true, error: 'Please verify your email before signing in. Check your inbox, or resend the link below.' };
   }
-  return { ok: true, username: base, token: createSession(base) };
+  rec.lastLogin = new Date().toISOString();
+  saveAuthDb();
+  return { ok: true, username: base, token: createSession(base), ...tierInfo(rec) };
 }
 /** Resend a verification link. Always returns ok so it never reveals which usernames exist. */
 async function handleAuthResend(body, req) {
@@ -1164,7 +1239,7 @@ function publicModeGate(req, res, url, p) {
     sendJSON(res, 403, { ok: false, error: 'Not available on the public deployment.' });
     return true;
   }
-  const owner = p.match(/^\/api\/(?:data|savepoint|savepoints|savepoint-file|agents-data)\/([^/]+)/);
+  const owner = p.match(/^\/api\/(?:data|savepoint|savepoints|savepoint-file|agents-data|usage)\/([^/]+)/);
   if (owner) {
     let uname = owner[1];
     try { uname = decodeURIComponent(uname); } catch (_) { /* keep raw */ }
@@ -1362,7 +1437,9 @@ const server = http.createServer(async (req, res) => {
       }
       if (p === '/api/auth/whoami' && req.method === 'GET') {
         const su = sessionUser(req, url);
-        sendJSON(res, 200, su ? { ok: true, username: su } : { ok: false });
+        if (!su) { sendJSON(res, 200, { ok: false }); return; }
+        const rec = loadAuthDb().users[su];
+        sendJSON(res, 200, { ok: true, username: su, ...tierInfo(rec) });
         return;
       }
     } catch (e) {
@@ -1370,6 +1447,50 @@ const server = http.createServer(async (req, res) => {
       return;
     }
     sendJSON(res, 404, { ok: false, error: 'Unknown auth endpoint' });
+    return;
+  }
+
+  // ── Usage ping (ephemeral accounts report browser-side data size) ──
+  if (p.startsWith('/api/usage/') && req.method === 'POST') {
+    const username = storageBaseKey(sanitize(p.replace(/^\/api\/usage\//, '').split('/')[0]));
+    try {
+      const body = await readBody(req);
+      const bytes = Math.max(0, parseInt(body && body.bytes, 10) || 0);
+      const rec = loadAuthDb().users[username];
+      if (rec) { rec.bytes = bytes; rec.lastLogin = new Date().toISOString(); saveAuthDb(); }
+      sendJSON(res, 200, { ok: true });
+    } catch (e) { sendJSON(res, 200, { ok: true }); }
+    return;
+  }
+
+  // ── Admin: invite-PIN registry (token-protected JSON) ──
+  // GET /api/admin/pins?token=…  → { limitMb, pins:[{pin,account,tier,email,name,redeemedAt,lastLogin,usedBytes,usedMb}] }
+  if (p === '/api/admin/pins' && req.method === 'GET') {
+    const token = String(url.searchParams.get('token') || req.headers['x-admin-token'] || '');
+    if (!ADMIN_TOKEN || token !== ADMIN_TOKEN) { sendJSON(res, 403, { ok: false, error: 'Forbidden' }); return; }
+    const pins = ensurePins();
+    const users = loadAuthDb().users;
+    const rows = Object.keys(pins.codes).sort().map((code) => {
+      const e = pins.codes[code] || {};
+      const rec = e.account ? users[e.account] : null;
+      const name = rec ? [rec.firstName, rec.lastName].filter(Boolean).join(' ') : '';
+      return {
+        pin: code, account: e.account || null, redeemedAt: e.redeemedAt || null,
+        tier: rec ? (rec.tier || 'beta') : null, email: rec ? (rec.email || null) : null,
+        name: name || null, lastLogin: rec ? (rec.lastLogin || null) : null,
+        usedBytes: rec ? (rec.bytes || 0) : 0, usedMb: rec ? +(((rec.bytes || 0) / 1048576).toFixed(2)) : 0,
+      };
+    });
+    // Also surface ephemeral (no-PIN) accounts so the whole roster is visible.
+    const ephemeral = Object.keys(users).filter((u) => (users[u].tier || 'ephemeral') !== 'beta').map((u) => {
+      const rec = users[u];
+      const name = [rec.firstName, rec.lastName].filter(Boolean).join(' ');
+      return { account: u, email: rec.email || null, name: name || null,
+        lastLogin: rec.lastLogin || null, usedBytes: rec.bytes || 0, usedMb: +(((rec.bytes || 0) / 1048576).toFixed(2)) };
+    });
+    sendJSON(res, 200, { ok: true, limitMb: MAX_USER_MB,
+      pinsTotal: rows.length, pinsUsed: rows.filter((r) => r.account).length,
+      pins: rows, ephemeralAccounts: ephemeral });
     return;
   }
 
@@ -1526,6 +1647,28 @@ const server = http.createServer(async (req, res) => {
       if(!data.lastSaved)data.lastSaved = new Date().toISOString();
       const jsonStr = JSON.stringify(data, null, 2);
       const base = storageBaseKey(username);
+      // ── Tiered storage enforcement (public mode) ──────────────────────────
+      if (PUBLIC_MODE) {
+        const db = loadAuthDb();
+        const rec = db.users[base];
+        const bytes = Buffer.byteLength(jsonStr, 'utf8');
+        const now = new Date().toISOString();
+        // Ephemeral accounts never persist server-side — their data stays in the
+        // browser. We record usage and tell the client to keep it local.
+        if (!rec || rec.tier !== 'beta') {
+          if (rec) { rec.bytes = bytes; rec.lastLogin = now; saveAuthDb(); }
+          return sendJSON(res, 200, { ok: false, ephemeral: true,
+            error: 'Your work is saved in this browser only. Enter an invite PIN to enable cloud backup.' });
+        }
+        // Beta accounts: hard cap. Over the limit → red alert + payment required.
+        if (bytes > MAX_USER_BYTES) {
+          rec.lastLogin = now; saveAuthDb();
+          return sendJSON(res, 413, { ok: false, overLimit: true,
+            limitMb: MAX_USER_MB, usedMb: +(bytes / 1048576).toFixed(2),
+            error: `Storage limit reached (${MAX_USER_MB} MB). Upgrade to keep saving to the cloud — new changes are held in this browser for now.` });
+        }
+        rec.bytes = bytes; rec.lastLogin = now; saveAuthDb();
+      }
       const canonicalFp = path.join(DATA_DIR, `${base}_data.json`);
       atomicWriteFileSync(canonicalFp, jsonStr);
       const legacyFlat = path.join(DATA_DIR, `${base}.json`);
@@ -2040,6 +2183,7 @@ const ptyHeartbeat = setInterval(() => {
 if (ptyHeartbeat.unref) ptyHeartbeat.unref();
 
 ghHydrateDataDir().then(() => {
+  if (PUBLIC_MODE) { try { ensurePins(); } catch (e) { console.warn('ensurePins:', e.message); } }
   server.listen(PORT, '0.0.0.0', () => {
     syncPrepareArtifactsFromDisk();
     console.log(`\n🌐 My Cosmos`);

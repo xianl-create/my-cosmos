@@ -27,3 +27,6 @@ DEPLOY-KEYS.txt
 
 # Cost-guard generated report (produced by scripts/cost-guard.js / CI)
 cost-alert.html
+
+# Beta invite PINs (local reference copy)
+beta-pins.txt

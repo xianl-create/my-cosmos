@@ -1690,6 +1690,21 @@ const server = http.createServer(async (req, res) => {
             limitMb: capMb, usedMb: +(bytes / 1048576).toFixed(2),
             error: `Storage limit reached (${capMb} MB). Upgrade to keep saving to the cloud — new changes are held in this browser for now.` });
         }
+        // Anti-clobber: never let a fresh starter graph wipe out substantial saved
+        // data (guards against a stale/buggy client re-creating a new-account shell).
+        try {
+          const exFp = path.join(DATA_DIR, `${base}_data.json`);
+          if (fs.existsSync(exFp)) {
+            const cur = JSON.parse(fs.readFileSync(exFp, 'utf8'));
+            const curN = Array.isArray(cur.nodes) ? cur.nodes.length : 0;
+            const inN = Array.isArray(data.nodes) ? data.nodes.length : 0;
+            if (curN >= 10 && inN <= 5 && inN < curN) {
+              console.warn(`🛡️  Blocked clobber of ${base}: stored ${curN} nodes vs incoming ${inN}`);
+              return sendJSON(res, 409, { ok: false, clobberBlocked: true, storedNodes: curN, incomingNodes: inN,
+                error: 'Save blocked to protect your data: the cloud copy is much larger than what was sent (looks like an accidental reset). Reload the page to pull your cloud data.' });
+            }
+          }
+        } catch (_) { /* if unsure, allow the write */ }
         rec.bytes = bytes; rec.lastLogin = now; saveAuthDb();
       }
       const canonicalFp = path.join(DATA_DIR, `${base}_data.json`);
@@ -1948,8 +1963,22 @@ const server = http.createServer(async (req, res) => {
   if (!filePath.startsWith(REPO_ROOT)) { res.writeHead(403); res.end('Forbidden'); return; }
   const ext = path.extname(filePath);
   const mime = MIME[ext] || 'application/octet-stream';
-  try { const content = fs.readFileSync(filePath); res.writeHead(200, { 'Content-Type': mime }); res.end(content); }
-  catch { res.writeHead(404); res.end('Not Found'); }
+  try {
+    const stat = fs.statSync(filePath);
+    const headers = { 'Content-Type': mime };
+    // App code (html/js/css) must never be served stale — a stale app.js was able
+    // to overwrite cloud data. no-cache forces revalidation; the ETag lets an
+    // unchanged file still answer 304 (cheap) but a redeploy (new mtime) busts it.
+    if (ext === '.html' || ext === '.js' || ext === '.css') {
+      const etag = 'W/"' + stat.size + '-' + Math.floor(stat.mtimeMs) + '"';
+      headers['Cache-Control'] = 'no-cache';
+      headers['ETag'] = etag;
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); res.end(); return; }
+    }
+    const content = fs.readFileSync(filePath);
+    res.writeHead(200, headers);
+    res.end(content);
+  } catch { res.writeHead(404); res.end('Not Found'); }
 });
 
 /* ── Interactive PTY over WebSocket: /ws/terminal ──

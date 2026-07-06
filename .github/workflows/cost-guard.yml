@@ -1,0 +1,47 @@
+name: Cost Guard
+
+# Watches the Render deployment every hour. If projected spend would exceed the
+# approved cap (COST_GUARD_MAX_USD, default $7/mo), the guard SUSPENDS the paid
+# service to stop further charges, writes a MAJOR-ALERT HTML report (uploaded as
+# an artifact) naming the specific reason, and FAILS this job — which emails the
+# repo owner. Resuming (granting permission to spend more) is a manual step:
+# run `node scripts/cost-guard.js --resume` or resume the service in Render.
+
+on:
+  schedule:
+    - cron: "17 * * * *" # hourly, at :17
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+      - name: Run cost guard (enforce)
+        env:
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
+          RENDER_OWNER_ID: tea-d958qopoagis738kgji0
+          COST_GUARD_MAX_USD: "7"
+        run: node scripts/cost-guard.js --enforce
+      - name: Summarize
+        if: always()
+        run: |
+          echo "## My Cosmos — Cost Guard" >> "$GITHUB_STEP_SUMMARY"
+          if [ -f cost-alert.html ]; then
+            grep -o 'MAJOR ALERT[^<]*\|Within budget[^<]*' cost-alert.html | head -1 >> "$GITHUB_STEP_SUMMARY" || true
+          else
+            echo "guard did not produce a report (check logs)" >> "$GITHUB_STEP_SUMMARY"
+          fi
+      - name: Upload HTML alert
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: cost-alert-html
+          path: cost-alert.html
+          if-no-files-found: warn

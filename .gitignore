@@ -24,3 +24,6 @@ developer/
 # Local deploy secrets — NEVER commit
 .deploy-secrets.env
 DEPLOY-KEYS.txt
+
+# Cost-guard generated report (produced by scripts/cost-guard.js / CI)
+cost-alert.html

@@ -36507,6 +36507,13 @@ async function publicAuthSubmit(mode){
     publicAuthSetTier(j);
     window.__AUTH_TOKEN__=j.token||'';
     try{localStorage.setItem('MyCosmos_authToken',window.__AUTH_TOKEN__);}catch(_){}
+    // Remember this account as a tab on this device, and (if opted in) its password.
+    try{
+      mcPubAcctAdd(j.username);
+      const rem=document.getElementById('lg-remember');
+      mcPubPwSet(j.username,(rem&&rem.checked)?password:'');
+      mcRenderPublicAccounts();
+    }catch(_){}
     publicAuthMsg('',false);
     if(passInp)passInp.value='';
     if(mode==='register'&&j.tier!=='beta'){
@@ -36549,6 +36556,60 @@ async function publicAuthResend(){
   }
 }
 
+/* ── Public login: remember accounts (and optionally passwords) on THIS browser ──
+   Everything here is localStorage-only and never leaves the device. Saved passwords
+   are base64-wrapped as light obfuscation (convenience autofill, like a browser
+   password manager — not cryptographic protection), which is why it sits behind an
+   explicit opt-in checkbox. Mirrors the local app's "continue as" account tabs, but
+   for hosted mode where each account still needs its password. */
+const MC_PUB_ACCTS_KEY='MyCosmos_publicAccounts';
+const MC_PUB_PW_KEY='MyCosmos_publicPw';
+function mcPubAcctsGet(){try{const a=JSON.parse(localStorage.getItem(MC_PUB_ACCTS_KEY)||'[]');return Array.isArray(a)?a.filter(x=>x&&x.u):[];}catch(_){return[];}}
+function mcPubAcctsSave(a){try{localStorage.setItem(MC_PUB_ACCTS_KEY,JSON.stringify(a.slice(0,20)));}catch(_){}}
+function mcPubAcctAdd(username){
+  if(!username)return;
+  const a=mcPubAcctsGet().filter(x=>x.u!==username);
+  a.unshift({u:username,ts:Date.now()});
+  mcPubAcctsSave(a);
+}
+function mcPubPwMap(){try{return JSON.parse(localStorage.getItem(MC_PUB_PW_KEY)||'{}')||{};}catch(_){return{};}}
+function mcPubPwGet(username){const v=mcPubPwMap()[username];if(!v)return'';try{return decodeURIComponent(escape(atob(v)));}catch(_){return'';}}
+function mcPubPwSet(username,pw){
+  const m=mcPubPwMap();
+  if(pw){try{m[username]=btoa(unescape(encodeURIComponent(pw)));}catch(_){try{m[username]=btoa(pw);}catch(__){return;}}}
+  else delete m[username];
+  try{localStorage.setItem(MC_PUB_PW_KEY,JSON.stringify(m));}catch(_){}
+}
+function mcPubAcctRemove(username){
+  mcPubAcctsSave(mcPubAcctsGet().filter(x=>x.u!==username));
+  mcPubPwSet(username,'');
+  mcRenderPublicAccounts();
+}
+/* Click a saved account → drop its name (and remembered password) into the form. */
+function mcPubAcctPick(username){
+  const nameInp=document.getElementById('lg-name');
+  const passInp=document.getElementById('lg-pass');
+  const rem=document.getElementById('lg-remember');
+  if(nameInp)nameInp.value=username;
+  const pw=mcPubPwGet(username);
+  if(passInp){passInp.value=pw;passInp.focus();}
+  if(rem)rem.checked=!!pw;
+  publicAuthMsg('',false);
+}
+function mcRenderPublicAccounts(){
+  if(!window.__PUBLIC_MODE__)return;
+  const sec=document.getElementById('lg-public-accounts');
+  const list=document.getElementById('lg-public-account-list');
+  if(!sec||!list)return;
+  const a=mcPubAcctsGet();
+  if(!a.length){sec.style.display='none';list.innerHTML='';return;}
+  sec.style.display='';
+  list.innerHTML=a.map(x=>{
+    const u=x.u,hasPw=!!mcPubPwGet(u),initial=(u.charAt(0)||'?').toUpperCase();
+    return `<div class="uc" data-u="${esc(u)}" onclick="mcPubAcctPick('${esc(u)}')"><div class="ua">${esc(initial)}</div><div class="ui"><b>${esc(u)}</b><span>${hasPw?'Password saved · tap to fill':'Tap to fill username'}</span></div><div class="uc-actions"><button class="uc-btn del" onclick="event.stopPropagation();mcPubAcctRemove('${esc(u)}')" title="Forget this account">🗑️</button></div></div>`;
+  }).join('');
+}
+
 function publicModeAdjustLoginScreen(){
   if(!window.__PUBLIC_MODE__)return;
   const setDisp=(id,v)=>{const el=document.getElementById(id);if(el)el.style.display=v;};
@@ -36569,6 +36630,7 @@ function publicModeAdjustLoginScreen(){
       if(e.key==='Enter'){e.preventDefault();e.stopPropagation();publicAuthSubmit('register');}
     });
   }
+  mcRenderPublicAccounts();
 }
 function applyPublicModeTabs(){
   if(!window.__PUBLIC_MODE__)return;

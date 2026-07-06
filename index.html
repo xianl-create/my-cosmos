@@ -148,6 +148,9 @@
         <input class="inp" id="lg-pin" type="text" placeholder="Invite PIN (optional — unlocks cloud backup)..." autocomplete="off" style="width:100%;margin-bottom:10px">
       </div>
       <input class="inp" id="lg-pass" type="password" placeholder="Password (8+ characters)..." autocomplete="current-password" style="width:100%;margin-bottom:10px">
+      <label id="lg-remember-row" style="display:flex;align-items:center;gap:8px;justify-content:center;margin:-2px 0 12px;font-size:12px;color:var(--t2);cursor:pointer;user-select:none">
+        <input type="checkbox" id="lg-remember" style="margin:0;cursor:pointer;accent-color:var(--acc)"> Remember password on this device
+      </label>
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-p" id="lg-signin-btn" onclick="publicAuthSubmit('login')">Sign in</button>
         <button class="btn btn-g" id="lg-register-btn" onclick="publicAuthSubmit('register')">Create account</button>
@@ -160,6 +163,8 @@
       <div id="lg-auth-msg" style="display:none;margin-top:10px;font-size:12px;line-height:1.4;color:#e05c5c"></div>
       <button class="btn btn-g" id="lg-resend-btn" onclick="publicAuthResend()" style="display:none;margin-top:10px;font-size:12px;padding:6px 12px">Resend verification email</button>
     </div>
+    <!-- Public hosted mode: accounts signed in on THIS browser (with optional saved passwords). -->
+    <div class="ux" id="lg-public-accounts" style="display:none;margin-top:14px"><h3>Accounts on this device</h3><div id="lg-public-account-list"></div></div>
     <div class="ux" id="ux" style="display:none"><h3>Or continue as:</h3><div id="ul"></div></div>
     <div id="lg-tools-row" style="margin-top:20px;padding-top:20px;border-top:1px solid var(--bdr);display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
       <button class="btn btn-g" onclick="importFromDataFolder()" style="font-size:12px;padding:6px 12px" title="Import users from data/ folder">📥 Import</button>

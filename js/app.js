@@ -745,7 +745,12 @@ const ST={
   async load(u){
     const canon=canonicalUserStorageKey(u);
     const variantKeys=apiLoginUsernameVariants(canon);
-    if(isLocalDiskServerApp()){
+    this._publicLoadError=false;
+    // Hosted/public mode: the server (backed by GitHub) is the source of truth.
+    // Load it authoritatively and FAIL CLOSED — on any error other than a clean
+    // 404 (genuinely new account) we flag an error so loginAs won't fabricate a
+    // starter graph that would overwrite the user's cloud data.
+    if(isLocalDiskServerApp()||window.__PUBLIC_MODE__){
       try{
         const r=await fetch(`/api/data/${encodeURIComponent(canon)}`);
         if(r.ok){
@@ -754,7 +759,9 @@ const ST={
           (await this.saveToIndexedDB(canon,nd))||this.saveToLocalStorage(canon,nd);
           return nd;
         }
-      }catch(e){}
+        // 404 = no cloud data yet (new account) → let the normal path/shell run.
+        if(window.__PUBLIC_MODE__&&r.status!==404){this._publicLoadError=true;return null;}
+      }catch(e){if(window.__PUBLIC_MODE__){this._publicLoadError=true;return null;}}
     }
     let data=null;
     for(const vk of variantKeys){
@@ -1939,6 +1946,15 @@ async function loginAs(u,dn){
     initApp();
     updateLeftSidebarVisibility();
   }else{
+    // Hosted mode: if the cloud load errored (network/auth/5xx, not a clean 404),
+    // do NOT create a starter graph — that would overwrite real cloud data on the
+    // next save. Bail back to login so the user can retry.
+    if(window.__PUBLIC_MODE__&&ST._publicLoadError){
+      CU=null;
+      if(typeof publicAuthMsg==='function')publicAuthMsg('Couldn’t load your account data — check your connection and try again.',true);
+      else try{alert('Couldn’t load your account data — check your connection and try again.');}catch(_){}
+      return;
+    }
     const shell=await loadNewUserShell();
     G=shell;
     G.displayName=dn||u;

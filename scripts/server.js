@@ -1488,9 +1488,19 @@ const server = http.createServer(async (req, res) => {
       return { account: u, email: rec.email || null, name: name || null,
         lastLogin: rec.lastLogin || null, usedBytes: rec.bytes || 0, usedMb: +(((rec.bytes || 0) / 1048576).toFixed(2)) };
     });
+    // Full roster of every account (includes beta owner accounts that hold no PIN).
+    const pinByAccount = {}; Object.keys(pins.codes).forEach((c) => { if (pins.codes[c].account) pinByAccount[pins.codes[c].account] = c; });
+    const accounts = Object.keys(users).sort().map((u) => {
+      const rec = users[u];
+      const name = [rec.firstName, rec.lastName].filter(Boolean).join(' ');
+      return { account: u, tier: rec.tier || 'ephemeral', pin: pinByAccount[u] || null,
+        email: rec.email || null, name: name || null, lastLogin: rec.lastLogin || null,
+        usedBytes: rec.bytes || 0, usedMb: +(((rec.bytes || 0) / 1048576).toFixed(2)) };
+    });
     sendJSON(res, 200, { ok: true, limitMb: MAX_USER_MB,
       pinsTotal: rows.length, pinsUsed: rows.filter((r) => r.account).length,
-      pins: rows, ephemeralAccounts: ephemeral });
+      accountsTotal: accounts.length, betaAccounts: accounts.filter((a) => a.tier === 'beta').length,
+      accounts, pins: rows, ephemeralAccounts: ephemeral });
     return;
   }
 

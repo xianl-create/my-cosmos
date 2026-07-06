@@ -16,6 +16,12 @@ services:
     envVars:
       - key: MY_COSMOS_PUBLIC
         value: "1"
+      # Starter instances have 512 MB RAM; Node auto-tunes its heap to ~256 MB,
+      # which a large single-user graph (e.g. a 28 MB file re-serialized + base64
+      # for the GitHub push) can blow past → "JavaScript heap out of memory"
+      # (SIGABRT / exit 134). Give V8 more headroom while staying under 512 MB.
+      - key: NODE_OPTIONS
+        value: --max-old-space-size=384
       # Private GitHub repo that durably stores user data (free tier disk is
       # ephemeral). Set both in the Render dashboard — never commit the token.
       - key: MY_COSMOS_GH_REPO # e.g. yourname/my-cosmos-data (PRIVATE repo)

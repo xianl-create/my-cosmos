@@ -36466,7 +36466,7 @@ async function publicAuthSubmit(mode){
     if(pin)payload.pin=pin;
   }
   if(!password){publicAuthMsg('Enter your password.',true);if(passInp)passInp.focus();return;}
-  publicAuthMsg(mode==='register'?'Creating account…':'Signing in…',false);
+  publicAuthSetLoading(true,mode==='register'?'Creating your account…':'Signing in…');
   try{
     const r=await fetch('/api/auth/'+(mode==='register'?'register':'login'),{
       method:'POST',headers:{'Content-Type':'application/json'},
@@ -36474,12 +36474,19 @@ async function publicAuthSubmit(mode){
     });
     const j=await r.json();
     if(!j||!j.ok){
+      publicAuthSetLoading(false);
+      if(j&&j.code==='username_taken'){
+        publicAuthMsg('That username is already taken. Try a different name, or tap “Sign in” to log in with this account.',true);
+        if(nameInp)nameInp.focus();
+        return;
+      }
       publicAuthMsg((j&&j.error)||'Sign-in failed.',true);
       if(j&&j.needVerify)publicAuthShowResend(true); // let them re-send the link
       return;
     }
     // Registration that requires email verification: no session yet — prompt to check inbox.
     if(j.pendingVerification){
+      publicAuthSetLoading(false);
       publicAuthShowRegisterFields(false);
       if(passInp)passInp.value='';
       const where=j.email?(' at '+j.email):'';
@@ -36498,11 +36505,29 @@ async function publicAuthSubmit(mode){
     if(mode==='register'&&j.tier!=='beta'){
       try{alert('Welcome! You’re trying the demo without an invite PIN, so your work is saved in this browser only (not backed up to the cloud). Ask for a PIN to enable cloud backup.');}catch(_){}
     }
-    await loginAs(j.username,j.username);
+    // Keep the spinner up through the (potentially large) data load.
+    publicAuthSetLoading(true,'Loading your cosmos…');
+    try{ await loginAs(j.username,j.username); }
+    finally{ publicAuthSetLoading(false); }
   }catch(e){
+    publicAuthSetLoading(false);
     publicAuthMsg('Could not reach the server — try again.',true);
   }
 }
+/* Show/hide the sign-in loading state: an animated spinner + indeterminate
+   progress bar, and disable the auth buttons so a click can't fire twice. */
+function publicAuthSetLoading(on,label){
+  const sp=document.getElementById('lg-auth-spinner');
+  const lbl=document.getElementById('lg-auth-spinner-label');
+  const b1=document.getElementById('lg-signin-btn');
+  const b2=document.getElementById('lg-register-btn');
+  if(lbl&&label)lbl.textContent=label;
+  if(sp)sp.style.display=on?'':'none';
+  [b1,b2].forEach(b=>{if(!b)return;b.disabled=!!on;b.style.opacity=on?'0.55':'';b.style.pointerEvents=on?'none':'';});
+  if(on)publicAuthMsg('',false); // clear any stale error while working
+}
+/* Phone-only: slide the right details panel in/out (see #rp-mobile-toggle / #mc-online-css). */
+function toggleRpMobile(){try{document.body.classList.toggle('rp-mobile-open');}catch(_){}}
 /* Ask the server to re-send the verification email for the entered username. */
 async function publicAuthResend(){
   const nameInp=document.getElementById('lg-name');

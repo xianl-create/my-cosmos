@@ -13,6 +13,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const zlib = require('zlib');
 const { spawn } = require('child_process');
 
 /* Optional deps — required only for the in-app interactive Terminal column.
@@ -128,6 +129,39 @@ function sendJSON(res, status, data) {
     'Access-Control-Allow-Private-Network': 'true',
   });
   res.end(JSON.stringify(data));
+}
+
+/** True if the client advertised gzip support (browsers always do). */
+function acceptsGzip(req) { return /\bgzip\b/i.test(String((req && req.headers && req.headers['accept-encoding']) || '')); }
+
+/** End a response with an optional gzip pass. Only compresses reasonably large
+ *  bodies (small ones aren't worth the CPU/latency). Falls back to plain on error. */
+function endMaybeGzip(req, res, status, headers, buf) {
+  headers = Object.assign({ 'Vary': 'Accept-Encoding' }, headers);
+  if (buf.length >= 1400 && acceptsGzip(req)) {
+    try {
+      const gz = zlib.gzipSync(buf, { level: 6 });
+      headers['Content-Encoding'] = 'gzip';
+      headers['Content-Length'] = gz.length;
+      res.writeHead(status, headers);
+      res.end(gz);
+      return;
+    } catch (_) { /* fall through to uncompressed */ }
+  }
+  headers['Content-Length'] = buf.length;
+  res.writeHead(status, headers);
+  res.end(buf);
+}
+
+/** JSON responder that gzips big payloads (e.g. the multi-MB /api/data graph).
+ *  Uses an mtime-keyed cache so a user reloading the same graph doesn't re-compress. */
+function sendJSONZ(req, res, status, data) {
+  const buf = Buffer.from(JSON.stringify(data), 'utf8');
+  endMaybeGzip(req, res, status, {
+    'Content-Type': 'application/json',
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Private-Network': 'true',
+  }, buf);
 }
 function readBody(req) { return new Promise((resolve, reject) => { let b = ''; req.on('data', c => b += c); req.on('end', () => { try { resolve(JSON.parse(b)); } catch (e) { reject(e); } }); req.on('error', reject); }); }
 
@@ -1145,7 +1179,7 @@ async function handleAuthRegister(body, req) {
     if (!isValidEmail(email)) return { ok: false, error: 'Enter a valid email address.' };
   }
   const db = loadAuthDb();
-  if (db.users[base] || userDataFileExists(base)) return { ok: false, error: 'That username is already taken.' };
+  if (db.users[base] || userDataFileExists(base)) return { ok: false, code: 'username_taken', error: 'That username is already taken.' };
   if (email && isValidEmail(email)) {
     const emailLower = email.toLowerCase();
     for (const u of Object.values(db.users)) {
@@ -1654,7 +1688,7 @@ const server = http.createServer(async (req, res) => {
 
     if (!data || !graphHasPayload(data)) return sendJSON(res, 404, { error: 'Not found' });
     try {
-      sendJSON(res, 200, data);
+      sendJSONZ(req, res, 200, data); // gzip: the graph can be tens of MB
     } catch (e) {
       sendJSON(res, 500, { error: 'Send failed' });
     }
@@ -1921,7 +1955,7 @@ const server = http.createServer(async (req, res) => {
     if (!username) return sendJSON(res, 400, { error: 'Invalid username' });
     try {
       const data = readAgentsArchiveForUser(username);
-      sendJSON(res, 200, data);
+      sendJSONZ(req, res, 200, data); // gzip: agent archive can be several MB
     } catch (e) {
       sendJSON(res, 500, { error: 'read agents failed' });
     }
@@ -1976,8 +2010,13 @@ const server = http.createServer(async (req, res) => {
       if (req.headers['if-none-match'] === etag) { res.writeHead(304, headers); res.end(); return; }
     }
     const content = fs.readFileSync(filePath);
-    res.writeHead(200, headers);
-    res.end(content);
+    // gzip text assets (app.js is ~1.5 MB) — big win on first paint over the network.
+    if (ext === '.js' || ext === '.css' || ext === '.html' || ext === '.svg' || ext === '.json') {
+      endMaybeGzip(req, res, 200, headers, content);
+    } else {
+      res.writeHead(200, headers);
+      res.end(content);
+    }
   } catch { res.writeHead(404); res.end('Not Found'); }
 });
 

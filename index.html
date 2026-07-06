@@ -55,6 +55,45 @@
 .wiz-conn-tab.wiz-conn-pulse{outline:2px dashed var(--acc);outline-offset:2px}
 .wiz-nest-branch{margin-bottom:3px}
 </style>
+<style id="mc-online-css">
+/* Online-mode enhancements (additive — app.css baseline unchanged). */
+
+/* Sign-in loading spinner + indeterminate progress bar (login screen). */
+.mc-auth-spin{width:26px;height:26px;margin:0 auto;border-radius:50%;border:3px solid var(--bdr);border-top-color:var(--acc);animation:mcAuthSpin .8s linear infinite}
+@keyframes mcAuthSpin{to{transform:rotate(360deg)}}
+.mc-auth-progress{margin:12px auto 0;max-width:240px;height:4px;border-radius:4px;background:var(--bdr);overflow:hidden}
+.mc-auth-progress-bar{width:40%;height:100%;border-radius:4px;background:var(--acc);animation:mcAuthBar 1.2s ease-in-out infinite}
+@keyframes mcAuthBar{0%{margin-left:-40%}60%{margin-left:100%}100%{margin-left:100%}}
+
+/* Floating toggle for the right details panel — only shown on phones. */
+#rp-mobile-toggle{display:none}
+
+/* ── Phone layout: keep the fixed 320px right panel from squeezing the app ── */
+@media (max-width:640px){
+  html,body{height:100dvh;-webkit-text-size-adjust:100%}
+  /* Right panel slides in from the edge instead of eating layout width. */
+  #rp{position:fixed;top:0;right:0;bottom:0;width:min(86vw,340px);
+      transform:translateX(103%);transition:transform .25s ease;
+      z-index:120;box-shadow:-12px 0 40px rgba(0,0,0,.5)}
+  body.rp-mobile-open #rp{transform:translateX(0)}
+  #rp-divider{display:none}
+  #center{flex:1 1 auto;min-width:0}
+  /* Top bar: scroll the control cluster rather than clipping/compressing it. */
+  #top-bar{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch}
+  #top-bar>*{flex-shrink:0}
+  .tb-bc{flex:0 1 auto}
+  /* Round button to open/close the details panel. */
+  #rp-mobile-toggle{display:flex;align-items:center;justify-content:center;
+    position:fixed;right:14px;bottom:16px;width:48px;height:48px;border-radius:50%;
+    background:var(--acc);color:#fff;border:none;z-index:121;cursor:pointer;
+    box-shadow:0 8px 24px rgba(0,0,0,.45)}
+  body.rp-mobile-open #rp-mobile-toggle{right:calc(min(86vw,340px) + 14px)}
+  /* Modals fit within the viewport and scroll if tall. */
+  .mo>*{max-width:96vw!important;max-height:90vh;overflow:auto}
+  /* Login card gets edge padding so inputs don't touch the screen sides. */
+  .lbox{padding:0 14px;box-sizing:border-box}
+}
+</style>
 </head>
 <body>
 <!-- LOGIN -->
@@ -75,6 +114,11 @@
       <div style="display:flex;gap:8px;justify-content:center;flex-wrap:wrap">
         <button class="btn btn-p" id="lg-signin-btn" onclick="publicAuthSubmit('login')">Sign in</button>
         <button class="btn btn-g" id="lg-register-btn" onclick="publicAuthSubmit('register')">Create account</button>
+      </div>
+      <div id="lg-auth-spinner" style="display:none;margin-top:14px;text-align:center">
+        <div class="mc-auth-spin" aria-hidden="true"></div>
+        <div class="mc-auth-progress"><div class="mc-auth-progress-bar"></div></div>
+        <div id="lg-auth-spinner-label" style="margin-top:8px;font-size:12px;color:var(--t2)">Signing in…</div>
       </div>
       <div id="lg-auth-msg" style="display:none;margin-top:10px;font-size:12px;line-height:1.4;color:#e05c5c"></div>
       <button class="btn btn-g" id="lg-resend-btn" onclick="publicAuthResend()" style="display:none;margin-top:10px;font-size:12px;padding:6px 12px">Resend verification email</button>
@@ -1145,6 +1189,10 @@
       <div id="rp-todo-list" style="min-height:50px"></div>
     </div>
   </div>
+  <!-- Phone-only: open/close the right details panel (styled in #mc-online-css). -->
+  <button id="rp-mobile-toggle" type="button" onclick="toggleRpMobile()" aria-label="Toggle details panel" title="Details">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="12" x2="20" y2="12"/><line x1="4" y1="17" x2="14" y2="17"/></svg>
+  </button>
 </div>
 <!-- Modals -->
 <div class="mo" id="m-node" onclick="if(event.target.id==='m-node')clMo('m-node')"><div class="md" onclick="event.stopPropagation()"><h3 id="mn-t">Add Node</h3>

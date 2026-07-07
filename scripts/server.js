@@ -1069,6 +1069,55 @@ function updatePreload(username, data) {
   } catch (e) {}
 }
 
+/* ── Inline-image externalization (Option A) ───────────────────────────────
+   Some accounts embed dozens of base64 images directly in their notes, so a
+   27 MB user file can be 96% image bytes. Every tiny text edit then re-pushes
+   all 27 MB to GitHub and re-serves it on every online load. This pulls each
+   large inline image out into a content-addressed file under <base>/media/ and
+   replaces it with a /api/media/<base>/<hash>.<ext> URL. Result: the stored JSON
+   shrinks to the text (~1 MB), images are pushed once (hash-deduped, immutable)
+   and browsers cache each image forever. Public deployment only — the local app
+   keeps images inline so local files stay self-contained and portable. */
+const MEDIA_EXT = { png:'png', jpeg:'jpg', jpg:'jpg', gif:'gif', webp:'webp', 'svg+xml':'svg', bmp:'bmp' };
+const MEDIA_MIN_B64 = 2048; // skip tiny inline icons — not worth a file each
+
+/** Replace large `data:image/...;base64,...` blobs in a serialized user JSON
+ *  with /api/media URLs, writing the bytes to <base>/media/. Never throws:
+ *  on any problem it returns the original string unchanged. */
+function externalizeInlineImages(base, jsonStr) {
+  try {
+    if (!jsonStr || jsonStr.indexOf('data:image/') === -1) return { slim: jsonStr, count: 0, bytes: 0 };
+    const mediaDir = path.join(DATA_DIR, base, 'media');
+    let count = 0, bytes = 0;
+    // Linear scan; base64 alphabet ([A-Za-z0-9+/=]) contains no JSON-string
+    // metacharacter, so the match never overruns the enclosing JSON string and
+    // the replacement (plain URL chars) keeps the JSON valid.
+    const re = /data:image\/([a-zA-Z0-9.+-]+);base64,([A-Za-z0-9+/]+={0,2})/g;
+    const slim = jsonStr.replace(re, (full, subtype, b64) => {
+      try {
+        if (b64.length < MEDIA_MIN_B64) return full;
+        const ext = MEDIA_EXT[String(subtype).toLowerCase()];
+        if (!ext) return full;
+        const buf = Buffer.from(b64, 'base64');
+        if (!buf.length) return full;
+        const hash = crypto.createHash('sha256').update(buf).digest('hex');
+        const rel = `${base}/media/${hash}.${ext}`;
+        const abs = path.join(DATA_DIR, rel);
+        if (!abs.startsWith(DATA_DIR)) return full;
+        if (!fs.existsSync(abs)) {
+          fs.mkdirSync(mediaDir, { recursive: true });
+          fs.writeFileSync(abs, buf);
+          bytes += buf.length;
+        }
+        ghQueue(rel); // content-addressed → hash-skip dedupes; pushed at most once
+        count++;
+        return `/api/media/${base}/${hash}.${ext}`;
+      } catch (_) { return full; }
+    });
+    return { slim, count, bytes };
+  } catch (_) { return { slim: jsonStr, count: 0, bytes: 0 }; }
+}
+
 /** Keeps data/file_boot.js + users_index.json aligned with *_data.json on disk (same as node scripts/prepare.js). Needed so double-click index.html (file://) loads — Chrome cannot fetch local JSON. */
 function syncPrepareArtifactsFromDisk() {
   if (PUBLIC_MODE) return; // users_index.json / file_boot.js are file:// conveniences; they leak data if served
@@ -1642,6 +1691,41 @@ async function ghHydrateDataDir() {
   }
 }
 
+/** On-demand hydrate of a single repo file into DATA_DIR. Used when a media file
+ *  is requested before boot hydration has fetched it (Render disk is ephemeral):
+ *  we know from the boot tree scan whether the blob exists in the repo, so we can
+ *  pull just that one blob and serve it — no cold-cache gap. Returns true if the
+ *  file is present on disk afterwards. Never throws. */
+const _ghHydrateOneInflight = new Map(); // rel -> Promise (coalesce concurrent misses)
+async function ghHydrateOne(rel) {
+  try {
+    if (!GH_ENABLED || !rel || rel.includes('..')) return false;
+    const abs = path.join(DATA_DIR, rel);
+    if (!abs.startsWith(DATA_DIR)) return false;
+    if (fs.existsSync(abs)) return true;
+    if (_ghHydrateOneInflight.has(rel)) return _ghHydrateOneInflight.get(rel);
+    const work = (async () => {
+      try {
+        let blobSha = _ghShaCache.get(rel);
+        if (!blobSha) {
+          const meta = await ghApi('GET', `${ghContentsPath(rel)}?ref=${encodeURIComponent(GH_BRANCH)}`);
+          if (meta.status === 200 && meta.body && meta.body.sha) blobSha = meta.body.sha;
+        }
+        if (!blobSha) return false;
+        const blob = await ghApi('GET', `/repos/${GH_REPO}/git/blobs/${blobSha}`);
+        if (blob.status !== 200 || !blob.body || typeof blob.body.content !== 'string') return false;
+        fs.mkdirSync(path.dirname(abs), { recursive: true });
+        fs.writeFileSync(abs, Buffer.from(blob.body.content, 'base64'));
+        _ghShaCache.set(rel, blobSha);
+        return fs.existsSync(abs);
+      } catch (_) { return false; }
+      finally { _ghHydrateOneInflight.delete(rel); }
+    })();
+    _ghHydrateOneInflight.set(rel, work);
+    return work;
+  } catch (_) { return false; }
+}
+
 const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') {
     res.writeHead(204, {
@@ -1956,7 +2040,13 @@ const server = http.createServer(async (req, res) => {
         rec.bytes = bytes; rec.lastLogin = now; saveAuthDb();
       }
       const canonicalFp = path.join(DATA_DIR, `${base}_data.json`);
-      atomicWriteFileSync(canonicalFp, jsonStr);
+      let toWrite = jsonStr;
+      if (PUBLIC_MODE) {
+        const ex = externalizeInlineImages(base, jsonStr);
+        toWrite = ex.slim;
+        if (ex.count) console.log(`🖼️  ${base}: externalized ${ex.count} image(s) (+${(ex.bytes / 1048576).toFixed(2)} MB media) → JSON now ${(Buffer.byteLength(toWrite, 'utf8') / 1048576).toFixed(2)} MB`);
+      }
+      atomicWriteFileSync(canonicalFp, toWrite);
       const legacyFlat = path.join(DATA_DIR, `${base}.json`);
       try { if (fs.existsSync(legacyFlat) && legacyFlat !== canonicalFp) fs.unlinkSync(legacyFlat); } catch (e) { /* keep canonical */ }
       updatePreload(base, data);
@@ -2204,6 +2294,46 @@ const server = http.createServer(async (req, res) => {
       sendJSON(res, 200, JSON.parse(fs.readFileSync(fp, 'utf-8')));
     } catch (e) { sendJSON(res, 500, { error: 'Read failed' }); }
     return;
+  }
+
+  // ── GET /api/media/<user>/<hash>.<ext> ──
+  // Content-addressed image extracted from a user's notes (see externalizeInlineImages).
+  // The URL is a capability (64-hex content hash → unguessable), so it needs no session
+  // — an <img> tag can't send an auth header. Immutable + long cache: fetched once.
+  {
+    const mm = p.match(/^\/api\/media\/([^/]+)\/([a-f0-9]{16,64})\.(png|jpg|jpeg|gif|webp|svg|bmp)$/i);
+    if (mm && req.method === 'GET') {
+      const mBase = storageBaseKey(sanitize(mm[1]));
+      const fname = `${mm[2].toLowerCase()}.${mm[3].toLowerCase()}`;
+      const abs = path.join(DATA_DIR, mBase, 'media', fname);
+      if (!abs.startsWith(DATA_DIR)) { res.writeHead(404); res.end('Not Found'); return; }
+      // Ephemeral Render disk: the blob may live in the repo but not yet on disk
+      // (boot hydration still running / restarted). Pull just this one on demand.
+      if (!fs.existsSync(abs)) {
+        const got = await ghHydrateOne(`${mBase}/media/${fname}`);
+        if (!got || !fs.existsSync(abs)) {
+          // Genuinely not here yet — tell the client to retry shortly (not a hard 404).
+          res.writeHead(GH_ENABLED ? 503 : 404, GH_ENABLED ? { 'Retry-After': '2', 'Cache-Control': 'no-store' } : {});
+          res.end(GH_ENABLED ? 'Hydrating' : 'Not Found');
+          return;
+        }
+      }
+      const etag = '"' + mm[2].toLowerCase() + '"';
+      const cacheHdr = 'public, max-age=31536000, immutable';
+      // Harden: user-supplied bytes served from our origin. nosniff stops MIME
+      // confusion; the CSP/sandbox neutralizes scripts inside an SVG opened directly.
+      const secHdr = { 'X-Content-Type-Options': 'nosniff', 'Content-Security-Policy': "default-src 'none'; style-src 'unsafe-inline'; sandbox" };
+      if (req.headers['if-none-match'] === etag) { res.writeHead(304, Object.assign({ 'ETag': etag, 'Cache-Control': cacheHdr }, secHdr)); res.end(); return; }
+      const mtype = MIME['.' + mm[3].toLowerCase()]
+        || { jpg: 'image/jpeg', jpeg: 'image/jpeg', gif: 'image/gif', webp: 'image/webp', bmp: 'image/bmp' }[mm[3].toLowerCase()]
+        || 'application/octet-stream';
+      try {
+        const content = fs.readFileSync(abs);
+        res.writeHead(200, Object.assign({ 'Content-Type': mtype, 'Cache-Control': cacheHdr, 'ETag': etag, 'Content-Length': content.length }, secHdr));
+        res.end(content);
+      } catch (_) { res.writeHead(404); res.end('Not Found'); }
+      return;
+    }
   }
 
   let filePath = p === '/' ? '/index.html' : p;

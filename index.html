@@ -83,6 +83,11 @@
 <style id="mc-online-css">
 /* Online-mode enhancements (additive — app.css baseline unchanged). */
 
+/* Note image still hydrating on the server: shimmer placeholder while it retries. */
+img.mc-media-loading{min-width:120px;min-height:80px;background:linear-gradient(90deg,rgba(127,127,127,.10) 25%,rgba(127,127,127,.20) 50%,rgba(127,127,127,.10) 75%);background-size:200% 100%;animation:mcMediaShine 1.2s linear infinite;border-radius:6px}
+img.mc-media-failed{min-width:120px;min-height:40px;background:rgba(127,127,127,.10)}
+@keyframes mcMediaShine{0%{background-position:200% 0}100%{background-position:-200% 0}}
+
 /* Sign-in loading spinner + indeterminate progress bar (login screen). */
 .mc-auth-spin{width:26px;height:26px;margin:0 auto;border-radius:50%;border:3px solid var(--bdr);border-top-color:var(--acc);animation:mcAuthSpin .8s linear infinite}
 @keyframes mcAuthSpin{to{transform:rotate(360deg)}}

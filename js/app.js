@@ -36691,6 +36691,42 @@ function toggleRpMobile(){try{document.body.classList.toggle('rp-mobile-open');}
   document.addEventListener('touchend',endTodo,{passive:true,capture:true});
   document.addEventListener('touchcancel',endTodo,{passive:true,capture:true});
 })();
+
+/* ── Online media buffer: retry /api/media images until the server has hydrated ──
+   Externalized note images are served from Render's ephemeral disk; right after a
+   restart a file may live in the repo but not yet on disk (server answers 503 +
+   Retry-After while it pulls the blob). Rather than show a broken image, we mark it
+   as loading (shimmer via #mc-online-css) and re-request it with backoff. We only
+   ever touch the LIVE <img> element (remove+re-add the SAME src to force a reload),
+   never the saved note HTML, so nothing polluted gets persisted. Online only. */
+(function(){
+  if(!window.__PUBLIC_MODE__)return;
+  const MAX=9;
+  const isMedia=(img)=>{try{return img&&img.tagName==='IMG'&&/\/api\/media\//.test(img.getAttribute('src')||img.getAttribute('data-mc-media')||'');}catch(_){return false;}};
+  document.addEventListener('error',(e)=>{
+    const img=e.target;if(!isMedia(img))return;
+    const src=img.getAttribute('src')||img.getAttribute('data-mc-media');if(!src)return;
+    let n=+(img.getAttribute('data-mc-retry')||0);
+    if(n>=MAX){img.classList.remove('mc-media-loading');img.classList.add('mc-media-failed');return;}
+    img.setAttribute('data-mc-retry',String(n+1));
+    img.setAttribute('data-mc-media',src.split('?')[0]);
+    img.classList.add('mc-media-loading');
+    const delay=Math.min(800*Math.pow(1.7,n),15000);
+    setTimeout(()=>{try{
+      const clean=img.getAttribute('data-mc-media');
+      if(!clean)return;
+      img.removeAttribute('src');            // force a fresh request for the same URL
+      img.setAttribute('src',clean);         // (503 has no-store, so this re-hits the server)
+    }catch(_){}} ,delay);
+  },true);
+  document.addEventListener('load',(e)=>{
+    const img=e.target;if(!isMedia(img))return;
+    if(img.classList.contains('mc-media-loading')||img.hasAttribute('data-mc-retry')){
+      img.classList.remove('mc-media-loading','mc-media-failed');
+      img.removeAttribute('data-mc-retry');
+    }
+  },true);
+})();
 /* Ask the server to re-send the verification email for the entered username. */
 async function publicAuthResend(){
   const nameInp=document.getElementById('lg-name');

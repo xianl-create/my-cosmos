@@ -14,14 +14,24 @@
  *   node scripts/cost-guard.js --enforce  # + suspend services if over budget
  *   node scripts/cost-guard.js --resume   # resume suspended services (grant permission)
  *
- * Config (env, all optional):
- *   RENDER_API_KEY     Render API key (falls back to DEPLOY-KEYS.txt locally)
- *   RENDER_OWNER_ID    workspace id (default: the My Cosmos workspace)
- *   COST_GUARD_MAX_USD approved monthly cap (default 7)
- *   COST_GUARD_BW_GB   included outbound bandwidth in GB (default 5, Hobby plan)
- *   COST_GUARD_HTML    output path for the report (default ../cost-alert.html)
+ * Two thresholds so a few cents of bandwidth never takes the demo offline:
+ *   - Soft cap (COST_GUARD_MAX_USD, default $7): the approved budget. Going a little
+ *     over it (bandwidth) is REPORTED in the HTML but the service keeps running and
+ *     CI does NOT fail (no email spam).
+ *   - Hard ceiling (cap + COST_GUARD_HEADROOM_USD, default +$5 = $12): real runaway
+ *     spend. Crossing it — or any STRUCTURAL change (bigger plan, extra instance,
+ *     extra paid service) — suspends the service and fails CI (emails you).
  *
- * Exit code: 0 = within budget, 2 = OVER BUDGET (so CI fails and emails you), 1 = error.
+ * Config (env, all optional):
+ *   RENDER_API_KEY         Render API key (falls back to DEPLOY-KEYS.txt locally)
+ *   RENDER_OWNER_ID        workspace id (default: the My Cosmos workspace)
+ *   COST_GUARD_MAX_USD     approved monthly cap / soft alert (default 7)
+ *   COST_GUARD_HEADROOM_USD tolerance above the cap before suspend (default 5)
+ *   COST_GUARD_HARD_USD    absolute suspend ceiling (default cap+headroom = 12)
+ *   COST_GUARD_BW_GB       included outbound bandwidth in GB (default 5, Hobby plan)
+ *   COST_GUARD_HTML        output path for the report (default ../cost-alert.html)
+ *
+ * Exit code: 0 = ok or small overage (noted), 2 = HARD BREACH (CI fails, emails you), 1 = error.
  */
 'use strict';
 const https = require('https');
@@ -29,8 +39,15 @@ const fs = require('fs');
 const path = require('path');
 
 const CAP_USD = parseFloat(process.env.COST_GUARD_MAX_USD || '7');
-const BW_INCLUDED_GB = parseFloat(process.env.COST_GUARD_BW_GB || '5');
-const BW_OVERAGE_PER_GB = 0.15; // Render outbound overage rate
+// Small bandwidth overages above the $7 Starter plan are expected and cheap ($0.15/GB),
+// so they must NOT suspend the demo. We only auto-suspend for genuine runaway cost:
+// a structural misconfig (bigger plan / extra instance / extra paid service) OR spend
+// past a HARD ceiling = cap + headroom. Below the hard ceiling a bandwidth overage is
+// reported (amber) but the service keeps running.
+const HEADROOM_USD = parseFloat(process.env.COST_GUARD_HEADROOM_USD || '5');
+const HARD_USD = parseFloat(process.env.COST_GUARD_HARD_USD || String(CAP_USD + HEADROOM_USD));
+const BW_INCLUDED_GB = parseFloat(process.env.COST_GUARD_BW_GB || '5'); // Hobby workspace: 5 GB/mo included
+const BW_OVERAGE_PER_GB = 0.15; // Render outbound overage rate ($0.15/GB)
 const OWNER_ID = process.env.RENDER_OWNER_ID || 'tea-d958qopoagis738kgji0';
 const OUT_HTML = process.env.COST_GUARD_HTML || path.join(__dirname, '..', 'cost-alert.html');
 const ENFORCE = process.argv.includes('--enforce');
@@ -84,10 +101,12 @@ async function bandwidthGBThisMonth(ids) {
 
 function esc(s) { return String(s == null ? '' : s).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c])); }
 
-function writeReport({ breach, projected, compute, bwGB, bwOver, reasons, rows, actions }) {
+function writeReport({ breach, softOver, projected, compute, bwGB, bwOver, reasons, rows, actions }) {
   const when = new Date().toISOString();
   const banner = breach
-    ? `<div style="background:#7f1d1d;color:#fff;padding:18px 22px;border-radius:10px;font-size:20px;font-weight:800">🚨 MAJOR ALERT — projected spend $${projected.toFixed(2)}/mo exceeds the $${CAP_USD.toFixed(2)} cap</div>`
+    ? `<div style="background:#7f1d1d;color:#fff;padding:18px 22px;border-radius:10px;font-size:20px;font-weight:800">🚨 MAJOR ALERT — projected spend $${projected.toFixed(2)}/mo past the $${HARD_USD.toFixed(2)} hard ceiling — service suspended</div>`
+    : softOver
+    ? `<div style="background:#78350f;color:#fff;padding:18px 22px;border-radius:10px;font-size:20px;font-weight:800">⚠️ Heads-up — projected $${projected.toFixed(2)}/mo, $${(projected - CAP_USD).toFixed(2)} over the $${CAP_USD.toFixed(2)} cap (bandwidth). Under the $${HARD_USD.toFixed(2)} ceiling — still running.</div>`
     : `<div style="background:#065f46;color:#fff;padding:18px 22px;border-radius:10px;font-size:20px;font-weight:800">✅ Within budget — projected spend $${projected.toFixed(2)}/mo (cap $${CAP_USD.toFixed(2)})</div>`;
   const reasonList = reasons.length
     ? '<ul style="line-height:1.6">' + reasons.map((r) => `<li><b>${esc(r)}</b></li>`).join('') + '</ul>'
@@ -132,7 +151,10 @@ function writeReport({ breach, projected, compute, bwGB, bwOver, reasons, rows, 
     return;
   }
 
-  const reasons = [];
+  // Structural reasons = recurring compute you did not approve (a real runaway-money
+  // risk) → these hard-stop. Info reasons = metered usage (bandwidth) → reported only.
+  const structuralReasons = [];
+  const infoReasons = [];
   const rows = [];
   let compute = 0;
   for (const d of details) {
@@ -144,22 +166,27 @@ function writeReport({ breach, projected, compute, bwGB, bwOver, reasons, rows, 
     const cost = suspended ? 0 : base * inst;
     compute += cost;
     rows.push({ name: d.name || d.id, type: d.type || '?', plan: plan || 'n/a', instances: inst, suspended, cost });
-    if (!suspended && base > PLAN_USD.starter) reasons.push(`Service "${d.name}" is on the ${plan} plan ($${base}/mo) — above the Starter $${PLAN_USD.starter} baseline.`);
-    if (!suspended && inst > 1) reasons.push(`Service "${d.name}" is running ${inst} instances ($${base}×${inst} = $${base * inst}/mo).`);
-    if (PLAN_USD[plan] == null && plan) reasons.push(`Service "${d.name}" is on an unrecognized plan "${plan}" — review its cost manually.`);
+    if (!suspended && base > PLAN_USD.starter) structuralReasons.push(`Service "${d.name}" is on the ${plan} plan ($${base}/mo) — above the Starter $${PLAN_USD.starter} baseline.`);
+    if (!suspended && inst > 1) structuralReasons.push(`Service "${d.name}" is running ${inst} instances ($${base}×${inst} = $${base * inst}/mo).`);
+    if (PLAN_USD[plan] == null && plan) structuralReasons.push(`Service "${d.name}" is on an unrecognized plan "${plan}" — review its cost manually.`);
   }
   const billableActive = rows.filter((r) => !r.suspended && r.cost > 0);
-  if (billableActive.length > 1) reasons.push(`${billableActive.length} paid services are active at once — only one Starter service is approved.`);
+  if (billableActive.length > 1) structuralReasons.push(`${billableActive.length} paid services are active at once — only one Starter service is approved.`);
 
   const bwGB = await bandwidthGBThisMonth(details.map((d) => d.id));
   const bwOver = Math.max(0, bwGB - BW_INCLUDED_GB) * BW_OVERAGE_PER_GB;
-  if (bwOver > 0) reasons.push(`Outbound bandwidth this month is ${bwGB.toFixed(2)} GB, over the ${BW_INCLUDED_GB} GB included — overage ≈ $${bwOver.toFixed(2)} and climbing.`);
+  if (bwOver > 0) infoReasons.push(`Outbound bandwidth this month is ${bwGB.toFixed(2)} GB, over the ${BW_INCLUDED_GB} GB included — overage ≈ $${bwOver.toFixed(2)} so far (billed $${BW_OVERAGE_PER_GB.toFixed(2)}/GB).`);
 
   const projected = compute + bwOver;
-  const breach = projected > CAP_USD + 1e-9 || reasons.length > 0;
+  const overSoft = projected > CAP_USD + 1e-9;      // above the approved $7 cap (informational)
+  const overHard = projected > HARD_USD + 1e-9;     // past the hard ceiling (real money)
+  // Only suspend + email for genuine runaway cost. A small bandwidth overage that keeps
+  // projected under the hard ceiling is NOT a breach — it's reported and left running.
+  const hardBreach = structuralReasons.length > 0 || overHard;
+  const reasons = structuralReasons.concat(infoReasons);
 
   const actions = [];
-  if (breach && ENFORCE) {
+  if (hardBreach && ENFORCE) {
     for (const d of details) {
       const sd = d.serviceDetails || {};
       const base = PLAN_USD[String(sd.plan || '').toLowerCase()] || 0;
@@ -170,15 +197,19 @@ function writeReport({ breach, projected, compute, bwGB, bwOver, reasons, rows, 
           : `Tried to suspend "${d.name}" but Render returned HTTP ${r.status}.`);
       }
     }
-  } else if (breach) {
+  } else if (hardBreach) {
     actions.push('Detect-only run: nothing was suspended. Re-run with --enforce (the scheduled job does) to auto-stop charges.');
+  } else if (overSoft) {
+    actions.push(`Over the $${CAP_USD.toFixed(2)} cap by $${(projected - CAP_USD).toFixed(2)} (bandwidth), but under the $${HARD_USD.toFixed(2)} hard ceiling — noted only, service left running.`);
   }
 
-  writeReport({ breach, projected, compute, bwGB, bwOver, reasons, rows, actions });
+  writeReport({ breach: hardBreach, softOver: overSoft && !hardBreach, projected, compute, bwGB, bwOver, reasons, rows, actions });
 
-  console.log(`cost-guard: projected $${projected.toFixed(2)}/mo (cap $${CAP_USD.toFixed(2)}) — ${breach ? 'OVER BUDGET' : 'ok'}`);
+  const state = hardBreach ? 'HARD BREACH — suspending' : overSoft ? 'over soft cap (noted, running)' : 'ok';
+  console.log(`cost-guard: projected $${projected.toFixed(2)}/mo (cap $${CAP_USD.toFixed(2)}, hard $${HARD_USD.toFixed(2)}) — ${state}`);
   reasons.forEach((r) => console.log(' - ' + r));
   actions.forEach((a) => console.log(' * ' + a));
   console.log('report: ' + OUT_HTML);
-  process.exit(breach ? 2 : 0);
+  // Fail CI (→ email) only on a hard breach. Soft bandwidth overages don't spam you.
+  process.exit(hardBreach ? 2 : 0);
 })().catch((e) => { console.error('cost-guard error:', e && e.message || e); process.exit(1); });
